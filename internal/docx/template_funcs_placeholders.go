@@ -90,7 +90,15 @@ func (d *documentMeta) replaceImages(srcXML string) (string, []MediaRel) {
 			rid := d.NextRId()
 			rId := fmt.Sprintf("rId%d", rid)
 
+			// Нормализуем путь перед поиском в mediaMap:
+			// replaceImage(.field) передаёт значение поля как есть (может быть UNC-путь
+			// с обратными слэшами), а mediaMap хранит ключи по filepath.Base().
+			// Пробуем сначала как есть, затем по Base() нормализованного пути.
 			media, ok := d.mediaMap[filename]
+			if !ok {
+				normFilename := path.Base(strings.ReplaceAll(filename, `\`, `/`))
+				media, ok = d.mediaMap[normFilename]
+			}
 			if !ok {
 				return block
 			}

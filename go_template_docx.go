@@ -194,6 +194,21 @@ func toStringMap(templateValues any) map[string]any {
 	switch v := templateValues.(type) {
 	case map[string]any:
 		return v
+	case map[string]string:
+		m := make(map[string]any, len(v))
+		for k, val := range v {
+			m[k] = val
+		}
+		return m
+	case []byte:
+		if len(v) == 0 {
+			return map[string]any{}
+		}
+		var m map[string]any
+		if err := json.Unmarshal(v, &m); err != nil {
+			return nil
+		}
+		return m
 	default:
 		// Пробуем через JSON round-trip (например, если передана struct)
 		b, err := json.Marshal(v)
@@ -293,28 +308,6 @@ func (dt *docxTemplate) Apply(templateValues any) error {
 	document.RemoveEmptyTableRows = dt.removeEmptyTableRows
 	document.IgnoreMissingKey = dt.ignoreMissingKey
 
-	// При ignoreMissingKey=true Go-шаблон рендерит отсутствующий ключ map[string]any
-	// как "<no value>" (нулевое значение interface{}), что ломает XML.
-	// Решение: заранее добавить все переменные шаблона в map со значением "",
-	// чтобы ключ всегда существовал и возвращал пустую строку.
-	if dt.ignoreMissingKey {
-		if m, ok := templateValues.(map[string]any); ok {
-			allVars, _ := dt.GetTemplateVariables()
-			for v := range allVars {
-				key := strings.TrimPrefix(v, ".")
-				if idx := strings.Index(key, "."); idx != -1 {
-					key = key[:idx]
-				}
-				if key == "" || strings.HasPrefix(key, "$") {
-					continue
-				}
-				if _, exists := m[key]; !exists {
-					m[key] = ""
-				}
-			}
-		}
-	}
-
 	// put loaded medias into the new docx file, following docx naming convention with sequential numbers
 	for filename, media := range dt.media {
 		// assign each filename to its word convention equivalent path "word/media/imageN.ext"
@@ -375,7 +368,7 @@ func (dt *docxTemplate) Apply(templateValues any) error {
 		case ".png":
 			contentTypes.AddDefaultUnique("png", "image/png")
 		default:
-			fmt.Println("Unsupported media file type (only accepting jpg/png for now):", filename)
+			// Неподдерживаемый тип — тихо пропускаем, не засоряем stdout.
 			continue
 		}
 	}

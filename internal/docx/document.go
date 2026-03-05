@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"text/template"
+	"text/template/parse"
 
 	goziputils "github.com/JJJJJJack/go-zip-utils"
 )
@@ -130,6 +131,97 @@ func parseDocumentSettings(docXML []byte) (usableWidthInches, usableHeightInches
 	return usableWidthInches, usableHeightInches, nil
 }
 
+// wrapMissingKeys конвертирует данные в map[string]any и заменяет nil → "".
+// tmpl используется чтобы найти все переменные шаблона и добавить
+// отсутствующие ключи со значением "" — иначе missingkey=zero вернёт
+// нулевой interface{} который рендерится как "<no value>" и ломает XML.
+func wrapMissingKeys(data any, tmpl *template.Template) map[string]any {
+	var m map[string]any
+
+	switch v := data.(type) {
+	case map[string]any:
+		m = make(map[string]any, len(v))
+		for k, val := range v {
+			if val == nil {
+				m[k] = ""
+			} else {
+				m[k] = val
+			}
+		}
+	case map[string]string:
+		m = make(map[string]any, len(v))
+		for k, val := range v {
+			m[k] = val
+		}
+	default:
+		return nil
+	}
+
+	// Добавляем все переменные шаблона со значением "" если их нет в данных.
+	// Это единственный способ избежать "<no value>" при missingkey=zero.
+	if tmpl != nil {
+		for _, t := range tmpl.Templates() {
+			if t.Tree == nil || t.Tree.Root == nil {
+				continue
+			}
+			for varName := range extractFieldNames(t.Tree.Root) {
+				if _, exists := m[varName]; !exists {
+					m[varName] = ""
+				}
+			}
+		}
+	}
+
+	return m
+}
+
+// extractFieldNames обходит дерево шаблона и возвращает имена полей верхнего
+// уровня (например ".Name" → "Name"). Нужно чтобы заполнить отсутствующие ключи.
+func extractFieldNames(node parse.Node) map[string]struct{} {
+	result := map[string]struct{}{}
+	extractFieldNamesRec(node, result)
+	return result
+}
+
+func extractFieldNamesRec(node parse.Node, out map[string]struct{}) {
+	if node == nil {
+		return
+	}
+	switch n := node.(type) {
+	case *parse.ListNode:
+		for _, elem := range n.Nodes {
+			extractFieldNamesRec(elem, out)
+		}
+	case *parse.ActionNode:
+		extractFieldNamesRec(n.Pipe, out)
+	case *parse.IfNode:
+		extractFieldNamesRec(n.Pipe, out)
+		extractFieldNamesRec(n.List, out)
+		extractFieldNamesRec(n.ElseList, out)
+	case *parse.RangeNode:
+		extractFieldNamesRec(n.Pipe, out)
+		extractFieldNamesRec(n.List, out)
+		extractFieldNamesRec(n.ElseList, out)
+	case *parse.WithNode:
+		extractFieldNamesRec(n.Pipe, out)
+		extractFieldNamesRec(n.List, out)
+		extractFieldNamesRec(n.ElseList, out)
+	case *parse.PipeNode:
+		for _, cmd := range n.Cmds {
+			extractFieldNamesRec(cmd, out)
+		}
+	case *parse.CommandNode:
+		for _, arg := range n.Args {
+			extractFieldNamesRec(arg, out)
+		}
+	case *parse.FieldNode:
+		// .Name или .Name.Sub — берём только первый уровень
+		if len(n.Ident) > 0 {
+			out[n.Ident[0]] = struct{}{}
+		}
+	}
+}
+
 // TODO: use xml parsing instead of regex
 func ParseDocumentMeta(zm goziputils.ZipMap, tf template.FuncMap) (*documentMeta, error) {
 	d := documentMeta{
@@ -243,6 +335,13 @@ func (d *documentMeta) ApplyTemplate(f *zip.File, zipWriter *zip.Writer, data an
 
 	if err != nil {
 		return nil, fmt.Errorf("unable to parse template in file '%s': %w", f.Name, err)
+	}
+
+	// Заполняем отсутствующие ключи после парсинга — теперь знаем все переменные шаблона.
+	if d.IgnoreMissingKey {
+		if wrapped := wrapMissingKeys(data, tmpl); wrapped != nil {
+			data = wrapped
+		}
 	}
 
 	appliedTemplate := bytes.Buffer{}

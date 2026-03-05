@@ -72,6 +72,12 @@ func ApplyTemplateToXml(f *zip.File, templateValues any, templateFuncs template.
 		return nil, fmt.Errorf("unable to parse template: %w", err)
 	}
 
+	if ignoreMissingKey {
+		if wrapped := wrapMissingKeys(templateValues, tmpl); wrapped != nil {
+			templateValues = wrapped
+		}
+	}
+
 	var buf bytes.Buffer
 	if err := tmpl.Execute(&buf, templateValues); err != nil {
 		return nil, fmt.Errorf("unable to execute template: %w", err)

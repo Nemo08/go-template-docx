@@ -53,14 +53,19 @@ func UpdateChart(fileContent []byte, cellAndValues map[string]string) ([]byte, e
 	return updated, nil
 }
 
-func ApplyTemplateToXml(f *zip.File, templateValues any, templateFuncs template.FuncMap) ([]byte, error) {
+func ApplyTemplateToXml(f *zip.File, templateValues any, templateFuncs template.FuncMap, ignoreMissingKey bool) ([]byte, error) {
 	fileContent, err := goziputils.ReadZipFileContent(f)
 	if err != nil {
 		return nil, fmt.Errorf("unable to read chart file '%s': %w", f.Name, err)
 	}
 
+	missingKeyOpt := "missingkey=error"
+	if ignoreMissingKey {
+		missingKeyOpt = "missingkey=zero"
+	}
+
 	tmpl, err := template.New(f.Name).
-		Option("missingkey=error").
+		Option(missingKeyOpt).
 		Funcs(templateFuncs).
 		Parse(PatchXml(string(fileContent)))
 	if err != nil {

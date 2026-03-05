@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"os"
 	"path"
 	"path/filepath"
@@ -32,6 +33,12 @@ type docxTemplate struct {
 	//Options
 	removeEmptyTableRows bool //remove empty table rows in template
 	ignoreMissingKey     bool
+	// warnOnMissingKey — если true, при обработке шаблона выводит предупреждение
+	// в консоль для каждого плейсхолдера, которого нет в переданных данных.
+	warnOnMissingKey bool
+	missingKeyLogger *slog.Logger
+	// filename — имя исходного .docx файла, используется в логах.
+	filename string
 }
 
 // copyTemplateFuncs создаёт независимую копию FuncMap.
@@ -47,7 +54,8 @@ func copyTemplateFuncs(src template.FuncMap) template.FuncMap {
 
 // NewDocxTemplateFromBytes creates a new docxTemplate object from the provided DOCX file bytes.
 // The docxTemplate object can be used through the exposed high-level APIs.
-func NewDocxTemplateFromBytes(docxBytes []byte) (*docxTemplate, error) {
+// FIX: added options variadic parameter (was missing, unlike NewDocxTemplateFromFilename)
+func NewDocxTemplateFromBytes(docxBytes []byte, options ...TemplateOption) (*docxTemplate, error) {
 	inputBuffer := bytes.Buffer{}
 
 	_, err := inputBuffer.Write(docxBytes)
@@ -55,17 +63,28 @@ func NewDocxTemplateFromBytes(docxBytes []byte) (*docxTemplate, error) {
 		return nil, fmt.Errorf("unable to write DOCX bytes to buffer: %w", err)
 	}
 
-	return &docxTemplate{
-		input:               inputBuffer,
-		output:              bytes.Buffer{},
-		media:               make(docx.MediaMap),
-		rel:                 &docx.Relationship{},
-		relMedia:            []docx.MediaRel{},
-		xlsxChartsMeta:      make(xlsxChartsMap),
-		templateFuncs:       copyTemplateFuncs(docx.TemplateFuncs),
-		filesPreProcessors:  []xml.HandlersMap{},
-		filesPostProcessors: []xml.HandlersMap{},
-	}, nil
+	// FIX: initialise defaults consistently with NewDocxTemplateFromFilename
+	tpl := &docxTemplate{
+		input:                inputBuffer,
+		output:               bytes.Buffer{},
+		media:                make(docx.MediaMap),
+		rel:                  &docx.Relationship{},
+		relMedia:             []docx.MediaRel{},
+		xlsxChartsMeta:       make(xlsxChartsMap),
+		templateFuncs:        copyTemplateFuncs(docx.TemplateFuncs),
+		filesPreProcessors:   []xml.HandlersMap{},
+		filesPostProcessors:  []xml.HandlersMap{},
+		removeEmptyTableRows: true,
+		ignoreMissingKey:     false,
+		warnOnMissingKey:     false,
+		missingKeyLogger:     slog.New(slog.NewTextHandler(os.Stderr, nil)),
+	}
+
+	for _, opt := range options {
+		opt(tpl)
+	}
+
+	return tpl, nil
 }
 
 // NewDocxTemplateFromFilename creates a new docxTemplate object from the provided DOCX filename (reading from disk).
@@ -95,6 +114,9 @@ func NewDocxTemplateFromFilename(docxFilename string, options ...TemplateOption)
 
 		removeEmptyTableRows: true,
 		ignoreMissingKey:     false,
+		warnOnMissingKey:     false,
+		missingKeyLogger:     slog.New(slog.NewTextHandler(os.Stderr, nil)),
+		filename:             docxFilename,
 	}
 
 	for _, opt := range options {
@@ -138,6 +160,52 @@ func (dt *docxTemplate) AddPreProcessors(filesPreProcessors ...xml.HandlersMap) 
 // after the template is applied.
 func (dt *docxTemplate) AddPostProcessors(filesPostProcessors ...xml.HandlersMap) {
 	dt.filesPostProcessors = filesPostProcessors
+}
+
+// warnMissingKeysInFile сравнивает переменные шаблона из конкретного XML-файла
+// с плоским представлением данных и выводит предупреждение для каждого
+// отсутствующего ключа. В лог пишется имя исходного .docx файла (dt.filename).
+// Вызывается только при warnOnMissingKey == true.
+func (dt *docxTemplate) warnMissingKeysInFile(tmpl *template.Template, data map[string]any) {
+	docxName := dt.filename
+	if docxName == "" {
+		docxName = "<bytes>"
+	}
+	vars := docxtemplate.ExtractAllVariables(tmpl)
+	for v := range vars {
+		// Переменные вида ".Field" или ".Field.Sub" — проверяем верхний уровень.
+		key := strings.TrimPrefix(v, ".")
+		if idx := strings.Index(key, "."); idx != -1 {
+			key = key[:idx]
+		}
+		// Пропускаем служебные переменные Go-шаблонов ($var)
+		if strings.HasPrefix(key, "$") || key == "" {
+			continue
+		}
+		if _, ok := data[key]; !ok {
+			dt.missingKeyLogger.Warn("missing key in template", "file", docxName, "placeholder", v)
+		}
+	}
+}
+
+// toStringMap пытается привести templateValues к map[string]any для проверки ключей.
+// Если значение не является map — возвращает nil (предупреждения не выводятся).
+func toStringMap(templateValues any) map[string]any {
+	switch v := templateValues.(type) {
+	case map[string]any:
+		return v
+	default:
+		// Пробуем через JSON round-trip (например, если передана struct)
+		b, err := json.Marshal(v)
+		if err != nil {
+			return nil
+		}
+		var m map[string]any
+		if err := json.Unmarshal(b, &m); err != nil {
+			return nil
+		}
+		return m
+	}
 }
 
 // GetTemplateVariables extracts and returns all template variables used in the DOCX file
@@ -200,7 +268,7 @@ func (dt *docxTemplate) Apply(templateValues any) error {
 		return fmt.Errorf("unable to parse document metadata: %w", err)
 	}
 
-	//set options((
+	//set options
 	document.RemoveEmptyTableRows = dt.removeEmptyTableRows
 	document.IgnoreMissingKey = dt.ignoreMissingKey
 
@@ -335,12 +403,27 @@ func (dt *docxTemplate) Apply(templateValues any) error {
 		}
 	}
 
+	// Если включены предупреждения о пропущенных ключах — один раз конвертируем
+	// данные в map для последующих проверок по каждому файлу.
+	var warnDataMap map[string]any
+	if dt.warnOnMissingKey {
+		warnDataMap = toStringMap(templateValues)
+	}
+
 	// Apply template to the header files
 	for i := 1; ; i++ {
 		headerFilename := fmt.Sprintf("word/header%d.xml", i)
 		f := docxZipMap[headerFilename]
 		if f == nil {
 			break
+		}
+
+		if dt.warnOnMissingKey && warnDataMap != nil {
+			if b, err2 := goziputils.ReadZipFileContent(f); err2 == nil {
+				if tmpl, err2 := template.New(path.Base(f.Name)).Funcs(dt.templateFuncs).Parse(docx.PatchXml(string(b))); err2 == nil {
+					dt.warnMissingKeysInFile(tmpl, warnDataMap)
+				}
+			}
 		}
 
 		media, err := document.ApplyTemplate(f, zipWriter, templateValues)
@@ -359,6 +442,14 @@ func (dt *docxTemplate) Apply(templateValues any) error {
 			break
 		}
 
+		if dt.warnOnMissingKey && warnDataMap != nil {
+			if b, err2 := goziputils.ReadZipFileContent(f); err2 == nil {
+				if tmpl, err2 := template.New(path.Base(f.Name)).Funcs(dt.templateFuncs).Parse(docx.PatchXml(string(b))); err2 == nil {
+					dt.warnMissingKeysInFile(tmpl, warnDataMap)
+				}
+			}
+		}
+
 		media, err := document.ApplyTemplate(f, zipWriter, templateValues)
 		if err != nil {
 			return fmt.Errorf("unable to apply template to footer file '%s': %w", f.Name, err)
@@ -371,6 +462,14 @@ func (dt *docxTemplate) Apply(templateValues any) error {
 	documentFile := docxZipMap["word/document.xml"]
 	if documentFile == nil {
 		return fmt.Errorf("word/document.xml not found in the DOCX file")
+	}
+
+	if dt.warnOnMissingKey && warnDataMap != nil {
+		if b, err2 := goziputils.ReadZipFileContent(documentFile); err2 == nil {
+			if tmpl, err2 := template.New(path.Base(documentFile.Name)).Funcs(dt.templateFuncs).Parse(docx.PatchXml(string(b))); err2 == nil {
+				dt.warnMissingKeysInFile(tmpl, warnDataMap)
+			}
+		}
 	}
 
 	media, err := document.ApplyTemplate(documentFile, zipWriter, templateValues)
@@ -389,7 +488,19 @@ func (dt *docxTemplate) Apply(templateValues any) error {
 			break
 		}
 
-		fileContent, err := docx.ApplyTemplateToXml(f, templateValues, dt.templateFuncs)
+		// FIX: pass ignoreMissingKey so chart templates respect the same option
+		// as document/header/footer templates. Previously this flag was ignored
+		// for chart files, causing a panic/error when a placeholder was absent
+		// from the supplied data.
+		if dt.warnOnMissingKey && warnDataMap != nil {
+			if b, err2 := goziputils.ReadZipFileContent(f); err2 == nil {
+				if tmpl, err2 := template.New(path.Base(f.Name)).Funcs(dt.templateFuncs).Parse(docx.PatchXml(string(b))); err2 == nil {
+					dt.warnMissingKeysInFile(tmpl, warnDataMap)
+				}
+			}
+		}
+
+		fileContent, err := docx.ApplyTemplateToXml(f, templateValues, dt.templateFuncs, dt.ignoreMissingKey)
 		if err != nil {
 			return fmt.Errorf("unable to apply template to chart file '%s': %w", f.Name, err)
 		}
@@ -460,6 +571,14 @@ func (dt *docxTemplate) Bytes() []byte {
 
 type TemplateOption func(*docxTemplate)
 
+// WithFilename задаёт имя файла для вывода в предупреждениях о пропущенных ключах.
+// Полезно при использовании NewDocxTemplateFromBytes, когда имя файла неизвестно автоматически.
+func WithFilename(name string) TemplateOption {
+	return func(t *docxTemplate) {
+		t.filename = name
+	}
+}
+
 func NoRemoveEmptyTableRows() TemplateOption {
 	return func(t *docxTemplate) {
 		t.removeEmptyTableRows = false
@@ -469,5 +588,23 @@ func NoRemoveEmptyTableRows() TemplateOption {
 func IgnoreMissingKey() TemplateOption {
 	return func(t *docxTemplate) {
 		t.ignoreMissingKey = true
+	}
+}
+
+// WarnOnMissingKey включает вывод предупреждений в stderr для каждого
+// плейсхолдера, которого нет в переданных данных. Автоматически включает
+// IgnoreMissingKey — иначе шаблон вернёт ошибку раньше, чем дойдёт до лога.
+func WarnOnMissingKey() TemplateOption {
+	return func(t *docxTemplate) {
+		t.ignoreMissingKey = true
+		t.warnOnMissingKey = true
+	}
+}
+
+// SetMissingKeyLogger позволяет задать свой slog.Handler вместо стандартного stderr.
+// Полезно для тестов или когда вывод нужно перенаправить в файл / подключить к общему логгеру приложения.
+func SetMissingKeyLogger(handler slog.Handler) TemplateOption {
+	return func(t *docxTemplate) {
+		t.missingKeyLogger = slog.New(handler)
 	}
 }

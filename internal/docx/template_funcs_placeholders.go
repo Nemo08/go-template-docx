@@ -90,11 +90,15 @@ func (d *documentMeta) replaceImages(srcXML string) (string, []MediaRel) {
 			rid := d.NextRId()
 			rId := fmt.Sprintf("rId%d", rid)
 
-			fmt.Println(d.mediaMap)
+			media, ok := d.mediaMap[filename]
+			if !ok {
+				return block
+			}
+
 			mediaRels = append(mediaRels, MediaRel{
 				Type:   ImageMediaType,
 				RefID:  rId,
-				Source: path.Join("media", d.mediaMap[filename].WordFilename),
+				Source: path.Join("media", media.WordFilename),
 			})
 
 			block = blipRe.ReplaceAllString(block, "${1}"+rId+"${2}")

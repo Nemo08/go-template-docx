@@ -76,7 +76,7 @@ func (d *documentMeta) replaceImages(srcXML string) (string, []MediaRel) {
 	blipRe := regexp.MustCompile(`(<a:blip\s+r:embed=")[^"]*(")`)
 
 	mediaRels := []MediaRel{}
-	var result string
+	result := srcXML
 	if d.mediaMap != nil {
 		result = anchorRe.ReplaceAllStringFunc(srcXML, func(block string) string {
 			pm := placeholderRe.FindStringSubmatch(block)

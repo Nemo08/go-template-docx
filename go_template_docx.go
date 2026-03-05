@@ -601,10 +601,11 @@ func WarnOnMissingKey() TemplateOption {
 	}
 }
 
-// SetMissingKeyLogger позволяет задать свой slog.Handler вместо стандартного stderr.
+// SetMissingKeyLogger позволяет задать свой *slog.Logger вместо стандартного stderr.
 // Полезно для тестов или когда вывод нужно перенаправить в файл / подключить к общему логгеру приложения.
-func SetMissingKeyLogger(handler slog.Handler) TemplateOption {
+// Пример: gotemplatedocx.SetMissingKeyLogger(slog.Default())
+func SetMissingKeyLogger(logger *slog.Logger) TemplateOption {
 	return func(t *docxTemplate) {
-		t.missingKeyLogger = slog.New(handler)
+		t.missingKeyLogger = logger
 	}
 }

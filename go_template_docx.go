@@ -242,10 +242,22 @@ func (dt *docxTemplate) GetTemplateVariables() (map[string]struct{}, error) {
 func (dt *docxTemplate) Apply(templateValues any) error {
 	switch v := templateValues.(type) {
 	case []byte:
+		if len(v) == 0 {
+			templateValues = map[string]any{}
+			break
+		}
 		err := json.Unmarshal(v, &templateValues)
 		if err != nil {
 			return fmt.Errorf("error unmarshalling templateValues: %w", err)
 		}
+	case map[string]string:
+		// Конвертируем map[string]string → map[string]any чтобы при missingkey=zero
+		// отсутствующий ключ рендерился как "" а не как "<no value>", что ломает XML.
+		m := make(map[string]any, len(v))
+		for k, val := range v {
+			m[k] = val
+		}
+		templateValues = m
 	}
 
 	// custom user pre processing
@@ -602,7 +614,6 @@ func WarnOnMissingKey() TemplateOption {
 }
 
 // SetMissingKeyLogger позволяет задать свой *slog.Logger вместо стандартного stderr.
-// Полезно для тестов или когда вывод нужно перенаправить в файл / подключить к общему логгеру приложения.
 // Пример: gotemplatedocx.SetMissingKeyLogger(slog.Default())
 func SetMissingKeyLogger(logger *slog.Logger) TemplateOption {
 	return func(t *docxTemplate) {

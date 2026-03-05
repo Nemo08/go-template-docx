@@ -250,6 +250,15 @@ func (dt *docxTemplate) Apply(templateValues any) error {
 		if err != nil {
 			return fmt.Errorf("error unmarshalling templateValues: %w", err)
 		}
+		// После анмаршала nil-значения рендерятся как "<no value>" что ломает XML.
+		// Заменяем nil → "" на верхнем уровне map.
+		if m, ok := templateValues.(map[string]any); ok {
+			for k, val := range m {
+				if val == nil {
+					m[k] = ""
+				}
+			}
+		}
 	case map[string]string:
 		// Конвертируем map[string]string → map[string]any чтобы при missingkey=zero
 		// отсутствующий ключ рендерился как "" а не как "<no value>", что ломает XML.
@@ -283,6 +292,28 @@ func (dt *docxTemplate) Apply(templateValues any) error {
 	//set options
 	document.RemoveEmptyTableRows = dt.removeEmptyTableRows
 	document.IgnoreMissingKey = dt.ignoreMissingKey
+
+	// При ignoreMissingKey=true Go-шаблон рендерит отсутствующий ключ map[string]any
+	// как "<no value>" (нулевое значение interface{}), что ломает XML.
+	// Решение: заранее добавить все переменные шаблона в map со значением "",
+	// чтобы ключ всегда существовал и возвращал пустую строку.
+	if dt.ignoreMissingKey {
+		if m, ok := templateValues.(map[string]any); ok {
+			allVars, _ := dt.GetTemplateVariables()
+			for v := range allVars {
+				key := strings.TrimPrefix(v, ".")
+				if idx := strings.Index(key, "."); idx != -1 {
+					key = key[:idx]
+				}
+				if key == "" || strings.HasPrefix(key, "$") {
+					continue
+				}
+				if _, exists := m[key]; !exists {
+					m[key] = ""
+				}
+			}
+		}
+	}
 
 	// put loaded medias into the new docx file, following docx naming convention with sequential numbers
 	for filename, media := range dt.media {

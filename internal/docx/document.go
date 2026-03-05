@@ -27,6 +27,9 @@ type documentMeta struct {
 	maxHeightInches    float64
 	templateFuncs      template.FuncMap
 	mediaMap           MediaMap
+	//Options
+	RemoveEmptyTableRows bool
+	IgnoreMissingKey     bool
 }
 
 const DOC_PR_ID_ROOF = 2_147_483_647 // docx id attributes are 32-bit signed integers
@@ -228,10 +231,16 @@ func (d *documentMeta) ApplyTemplate(f *zip.File, zipWriter *zip.Writer, data an
 
 	documentXml = []byte(PatchXml(string(documentXml)))
 
+	tplOption := "missingkey=error"
+	if d.IgnoreMissingKey {
+		tplOption = "missingkey=zero"
+	}
+
 	tmpl, err := template.New(f.Name).
-		Option("missingkey=error").
+		Option(tplOption).
 		Funcs(d.templateFuncs).
 		Parse(string(documentXml))
+
 	if err != nil {
 		return nil, fmt.Errorf("unable to parse template in file '%s': %w", f.Name, err)
 	}
@@ -259,7 +268,9 @@ func (d *documentMeta) ApplyTemplate(f *zip.File, zipWriter *zip.Writer, data an
 
 	output = ensureXmlSpacePreserve(output)
 
-	output = removeEmptyTableRows(output)
+	if d.RemoveEmptyTableRows {
+		output = removeEmptyTableRows(output)
+	}
 
 	err = goziputils.RewriteFileIntoZipWriter(zipWriter, f, []byte(output))
 	if err != nil {

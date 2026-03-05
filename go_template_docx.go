@@ -29,6 +29,20 @@ type docxTemplate struct {
 	templateFuncs       template.FuncMap
 	filesPreProcessors  []xml.HandlersMap
 	filesPostProcessors []xml.HandlersMap
+	//Options
+	removeEmptyTableRows bool //remove empty table rows in template
+	ignoreMissingKey     bool
+}
+
+// copyTemplateFuncs создаёт независимую копию FuncMap.
+// Необходимо чтобы каждый экземпляр docxTemplate имел свою map
+// и не было гонки при параллельном вызове AddTemplateFuncs из горутин.
+func copyTemplateFuncs(src template.FuncMap) template.FuncMap {
+	dst := make(template.FuncMap, len(src))
+	for k, v := range src {
+		dst[k] = v
+	}
+	return dst
 }
 
 // NewDocxTemplateFromBytes creates a new docxTemplate object from the provided DOCX file bytes.
@@ -44,11 +58,11 @@ func NewDocxTemplateFromBytes(docxBytes []byte) (*docxTemplate, error) {
 	return &docxTemplate{
 		input:               inputBuffer,
 		output:              bytes.Buffer{},
-		media:               docx.MediaMap{},
+		media:               make(docx.MediaMap),
 		rel:                 &docx.Relationship{},
 		relMedia:            []docx.MediaRel{},
 		xlsxChartsMeta:      make(xlsxChartsMap),
-		templateFuncs:       docx.TemplateFuncs,
+		templateFuncs:       copyTemplateFuncs(docx.TemplateFuncs),
 		filesPreProcessors:  []xml.HandlersMap{},
 		filesPostProcessors: []xml.HandlersMap{},
 	}, nil
@@ -56,7 +70,7 @@ func NewDocxTemplateFromBytes(docxBytes []byte) (*docxTemplate, error) {
 
 // NewDocxTemplateFromFilename creates a new docxTemplate object from the provided DOCX filename (reading from disk).
 // The docxTemplate object can be used through the exposed high-level APIs.
-func NewDocxTemplateFromFilename(docxFilename string) (*docxTemplate, error) {
+func NewDocxTemplateFromFilename(docxFilename string, options ...TemplateOption) (*docxTemplate, error) {
 	docxBytes, err := os.ReadFile(docxFilename)
 	if err != nil {
 		return nil, fmt.Errorf("unable to read file %s: %w", docxFilename, err)
@@ -68,17 +82,26 @@ func NewDocxTemplateFromFilename(docxFilename string) (*docxTemplate, error) {
 		return nil, fmt.Errorf("unable to write DOCX bytes to buffer: %w", err)
 	}
 
-	return &docxTemplate{
+	tpl := &docxTemplate{
 		input:               inputBuffer,
 		output:              bytes.Buffer{},
-		media:               make(docx.MediaMap),
+		media:               docx.MediaMap{},
 		rel:                 &docx.Relationship{},
 		relMedia:            []docx.MediaRel{},
 		xlsxChartsMeta:      make(xlsxChartsMap),
-		templateFuncs:       docx.TemplateFuncs,
+		templateFuncs:       copyTemplateFuncs(docx.TemplateFuncs),
 		filesPreProcessors:  []xml.HandlersMap{},
 		filesPostProcessors: []xml.HandlersMap{},
-	}, nil
+
+		removeEmptyTableRows: true,
+		ignoreMissingKey:     false,
+	}
+
+	for _, opt := range options {
+		opt(tpl)
+	}
+
+	return tpl, nil
 }
 
 // Media adds a media file to the docxTemplate object.
@@ -176,6 +199,10 @@ func (dt *docxTemplate) Apply(templateValues any) error {
 	if err != nil {
 		return fmt.Errorf("unable to parse document metadata: %w", err)
 	}
+
+	//set options((
+	document.RemoveEmptyTableRows = dt.removeEmptyTableRows
+	document.IgnoreMissingKey = dt.ignoreMissingKey
 
 	// put loaded medias into the new docx file, following docx naming convention with sequential numbers
 	for filename, media := range dt.media {
@@ -429,4 +456,18 @@ func (dt *docxTemplate) Save(filename string) error {
 // (empty if Apply was not used).
 func (dt *docxTemplate) Bytes() []byte {
 	return dt.output.Bytes()
+}
+
+type TemplateOption func(*docxTemplate)
+
+func NoRemoveEmptyTableRows() TemplateOption {
+	return func(t *docxTemplate) {
+		t.removeEmptyTableRows = false
+	}
+}
+
+func IgnoreMissingKey() TemplateOption {
+	return func(t *docxTemplate) {
+		t.ignoreMissingKey = true
+	}
 }

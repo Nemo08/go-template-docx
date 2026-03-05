@@ -70,34 +70,39 @@ func (d *documentMeta) applyImages(srcXML string) (string, []MediaRel, error) {
 // replaceImages looks for [[REPLACE_IMAGE:filename.ext]] placeholders inside <w:drawing>...</w:drawing> blocks
 // remove the placeholder and replaces the image reference inside the block with the given image's rId.
 func (d *documentMeta) replaceImages(srcXML string) (string, []MediaRel) {
+
 	anchorRe := regexp.MustCompile(`(?s)<w:drawing>.*?</w:drawing>`)
 	placeholderRe := regexp.MustCompile(`\[\[REPLACE_IMAGE:([^\]]+)\]\]`)
 	blipRe := regexp.MustCompile(`(<a:blip\s+r:embed=")[^"]*(")`)
 
 	mediaRels := []MediaRel{}
+	var result string
+	if d.mediaMap != nil {
+		result = anchorRe.ReplaceAllStringFunc(srcXML, func(block string) string {
+			pm := placeholderRe.FindStringSubmatch(block)
+			if len(pm) < 2 {
+				return block
+			}
+			filename := pm[1]
 
-	result := anchorRe.ReplaceAllStringFunc(srcXML, func(block string) string {
-		pm := placeholderRe.FindStringSubmatch(block)
-		if len(pm) < 2 {
+			block = placeholderRe.ReplaceAllString(block, "")
+
+			rid := d.NextRId()
+			rId := fmt.Sprintf("rId%d", rid)
+
+			fmt.Println(d.mediaMap)
+			mediaRels = append(mediaRels, MediaRel{
+				Type:   ImageMediaType,
+				RefID:  rId,
+				Source: path.Join("media", d.mediaMap[filename].WordFilename),
+			})
+
+			block = blipRe.ReplaceAllString(block, "${1}"+rId+"${2}")
+
 			return block
-		}
-		filename := pm[1]
-
-		block = placeholderRe.ReplaceAllString(block, "")
-
-		rid := d.NextRId()
-		rId := fmt.Sprintf("rId%d", rid)
-
-		mediaRels = append(mediaRels, MediaRel{
-			Type:   ImageMediaType,
-			RefID:  rId,
-			Source: path.Join("media", d.mediaMap[filename].WordFilename),
 		})
 
-		block = blipRe.ReplaceAllString(block, "${1}"+rId+"${2}")
-
-		return block
-	})
+	}
 
 	return result, mediaRels
 }

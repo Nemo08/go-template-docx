@@ -153,14 +153,14 @@ func (dt *docxTemplate) AddTemplateFuncs(funcMap template.FuncMap) {
 // (e.g., "word/document.xml") and the value is a list of functions that overwrite it sequentially,
 // before the template is applied.
 func (dt *docxTemplate) AddPreProcessors(filesPreProcessors ...xml.HandlersMap) {
-	dt.filesPreProcessors = filesPreProcessors
+	dt.filesPreProcessors = append(dt.filesPreProcessors, filesPreProcessors...)
 }
 
 // AddPostProcessors adds XML post-processing maps in which the key is the XML file path
 // (e.g., "word/document.xml") and the value is a list of functions that overwrite it sequentially,
 // after the template is applied.
 func (dt *docxTemplate) AddPostProcessors(filesPostProcessors ...xml.HandlersMap) {
-	dt.filesPostProcessors = filesPostProcessors
+	dt.filesPostProcessors = append(dt.filesPostProcessors, filesPostProcessors...)
 }
 
 // warnMissingKeysInFile сравнивает переменные шаблона из конкретного XML-файла

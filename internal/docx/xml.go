@@ -5,23 +5,28 @@ import (
 	"strings"
 )
 
+var (
+	reOpenBrace    = regexp.MustCompile(`\{([^\}]*?)\{`)
+	reCloseBrace   = regexp.MustCompile(`\}([^\{]*?)\}`)
+	reTemplateExpr = regexp.MustCompile(`\{\{[\s\S]*?\}\}`)
+	reXmlTag       = regexp.MustCompile(`(<\s*\/?[\w-:.]+(\s+[^>]*?)?[\s\/]*>)`)
+	reBareHexArg1  = regexp.MustCompile(`(?i)\{\{\s*shapeBgFillColor\s+(#?[0-9A-Fa-f]{6})\s*\}\}`)
+	reBareHexArg2  = regexp.MustCompile(`(?i)\{\{\s*tableCellBgColor\s+(#?[0-9A-Fa-f]{6})\s*\}\}`)
+)
+
 // PatchXml removes automatically insert content between template expressions
 // (EG: "{{ .Text }}" could have correctors highlights tags separating the expressions tokens).
 func PatchXml(srcXml string) string {
 	// Fix separated {{
-	re := regexp.MustCompile(`\{([^\}]*?)\{`)
-	srcXml = re.ReplaceAllString(srcXml, "{{")
+	srcXml = reOpenBrace.ReplaceAllString(srcXml, "{{")
 
 	// Fix separated }}
-	re = regexp.MustCompile(`\}([^\{]*?)\}`)
-	srcXml = re.ReplaceAllString(srcXml, "}}")
+	srcXml = reCloseBrace.ReplaceAllString(srcXml, "}}")
 
 	// Remove unnecessary XML tags inside template expressions and unescape XML entities
-	re = regexp.MustCompile(`\{\{[\s\S]*?\}\}`)
-	matches := re.FindAllString(srcXml, -1)
+	matches := reTemplateExpr.FindAllString(srcXml, -1)
 	for _, match := range matches {
-		xmlRegex := regexp.MustCompile(`(<\s*\/?[\w-:.]+(\s+[^>]*?)?[\s\/]*>)`)
-		templateText := xmlRegex.ReplaceAllString(match, "")
+		templateText := reXmlTag.ReplaceAllString(match, "")
 		// Unescape common XML/HTML entities that Word may inject inside attributes
 		// (e.g., {{shapeBgFillColor (index .Map &quot;Color2&quot;)}})
 		templateText = strings.NewReplacer(
@@ -44,17 +49,8 @@ func PatchXml(srcXml string) string {
 	// Word may strip quotes inside certain attribute values (e.g., alt/descr of shapes).
 	// That leads to invalid Go template syntax like: {{shapeBgFillColor 00FF00}}.
 	// To make templating robust, wrap bare hex arguments in quotes for known funcs.
-	// Examples fixed here:
-	//   - {{shapeBgFillColor 00FF00}}   -> {{shapeBgFillColor "00FF00"}}
-	//   - {{shapeBgFillColor #00FF00}}  -> {{shapeBgFillColor "#00FF00"}}
-	//   - {{tableCellBgColor 00FF00}}   -> {{tableCellBgColor "00FF00"}}
-	wrapBareHexArg := func(funcName string) {
-		pat := regexp.MustCompile(`(?i)\{\{\s*` + funcName + `\s+(#?[0-9A-Fa-f]{6})\s*\}\}`)
-		srcXml = pat.ReplaceAllString(srcXml, `{{`+funcName+` "$1"}}`)
-	}
-
-	wrapBareHexArg("shapeBgFillColor")
-	wrapBareHexArg("tableCellBgColor")
+	srcXml = reBareHexArg1.ReplaceAllString(srcXml, `{{shapeBgFillColor "$1"}}`)
+	srcXml = reBareHexArg2.ReplaceAllString(srcXml, `{{tableCellBgColor "$1"}}`)
 
 	return srcXml
 }

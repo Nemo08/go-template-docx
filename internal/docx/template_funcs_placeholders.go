@@ -10,11 +10,12 @@ import (
 	"text/template"
 )
 
+var reImagePlaceholder = regexp.MustCompile(`\[\[IMAGE:.*?\]\]`)
+
 func (d *documentMeta) applyImages(srcXML string) (string, []MediaRel, error) {
 	mediaRels := []MediaRel{}
 
-	imagePlaceholderRE := regexp.MustCompile(`\[\[IMAGE:.*?\]\]`)
-	xmlBlocks := imagePlaceholderRE.FindAllString(srcXML, -1)
+	xmlBlocks := reImagePlaceholder.FindAllString(srcXML, -1)
 	for _, xmlBlock := range xmlBlocks {
 		filename := strings.TrimPrefix(xmlBlock, "[[IMAGE:")
 		filename = strings.TrimSuffix(filename, "]]")
@@ -67,25 +68,32 @@ func (d *documentMeta) applyImages(srcXML string) (string, []MediaRel, error) {
 	return srcXML, mediaRels, nil
 }
 
+var (
+	reDrawingBlock    = regexp.MustCompile(`(?s)<w:drawing>.*?</w:drawing>`)
+	reReplaceImage    = regexp.MustCompile(`\[\[REPLACE_IMAGE:([^\]]+)\]\]`)
+	reBlipEmbed       = regexp.MustCompile(`(<a:blip\s+r:embed=")[^"]*(")`)
+	reHexColor        = regexp.MustCompile(`\[\[TABLE_CELL_BG_COLOR:#?([0-9A-Fa-f]{6})\]\]`)
+	reShdTag          = regexp.MustCompile(`(?i)<w:shd[^>]*?/>`)
+	reFillAttr        = regexp.MustCompile(`(?i)(<w:shd[^>]*? w:fill=")[^"]*(")`)
+	reShdOpenTag      = regexp.MustCompile(`(?i)(<w:shd)`)
+	reTcBlock         = regexp.MustCompile(`(?s)<w:tc>.*?</w:tc>`)
+)
+
 // replaceImages looks for [[REPLACE_IMAGE:filename.ext]] placeholders inside <w:drawing>...</w:drawing> blocks
 // remove the placeholder and replaces the image reference inside the block with the given image's rId.
 func (d *documentMeta) replaceImages(srcXML string) (string, []MediaRel) {
 
-	anchorRe := regexp.MustCompile(`(?s)<w:drawing>.*?</w:drawing>`)
-	placeholderRe := regexp.MustCompile(`\[\[REPLACE_IMAGE:([^\]]+)\]\]`)
-	blipRe := regexp.MustCompile(`(<a:blip\s+r:embed=")[^"]*(")`)
-
 	mediaRels := []MediaRel{}
 	result := srcXML
 	if d.mediaMap != nil {
-		result = anchorRe.ReplaceAllStringFunc(srcXML, func(block string) string {
-			pm := placeholderRe.FindStringSubmatch(block)
+		result = reDrawingBlock.ReplaceAllStringFunc(srcXML, func(block string) string {
+			pm := reReplaceImage.FindStringSubmatch(block)
 			if len(pm) < 2 {
 				return block
 			}
 			filename := pm[1]
 
-			block = placeholderRe.ReplaceAllString(block, "")
+			block = reReplaceImage.ReplaceAllString(block, "")
 
 			rid := d.NextRId()
 			rId := fmt.Sprintf("rId%d", rid)
@@ -109,7 +117,7 @@ func (d *documentMeta) replaceImages(srcXML string) (string, []MediaRel) {
 				Source: path.Join("media", media.WordFilename),
 			})
 
-			block = blipRe.ReplaceAllString(block, "${1}"+rId+"${2}")
+			block = reBlipEmbed.ReplaceAllString(block, "${1}"+rId+"${2}")
 
 			return block
 		})
@@ -281,29 +289,24 @@ const withShading = `><w:shd w:val="clear" w:color="auto" w:fill="FFFFFF" /></w:
 // replaceTableCellBgColors is used to apply the hex color found in the
 // [[TABLE_CELL_BG_COLOR:RRGGBB]]/[[TABLE_CELL_BG_COLOR:#RRGGBB]] as the background color of the table cell
 func (d *documentMeta) replaceTableCellBgColors(srcXML string) string {
-	tcRe := regexp.MustCompile(`(?s)<w:tc>.*?</w:tc>`)
-
-	output := tcRe.ReplaceAllStringFunc(srcXML, func(block string) string {
-		hexRe := regexp.MustCompile(`\[\[TABLE_CELL_BG_COLOR:#?([0-9A-Fa-f]{6})\]\]`)
-		hexMatch := hexRe.FindStringSubmatch(block)
+	output := reTcBlock.ReplaceAllStringFunc(srcXML, func(block string) string {
+		hexMatch := reHexColor.FindStringSubmatch(block)
 		if len(hexMatch) < 2 {
 			return block
 		}
 		hex := hexMatch[1]
 
-		if !regexp.MustCompile(`(?i)<w:shd[^>]*?/>`).MatchString(block) {
+		if !reShdTag.MatchString(block) {
 			block = strings.Replace(block, withoutShading, withShading, 1)
 		}
 
-		fillRe := regexp.MustCompile(`(?i)(<w:shd[^>]*? w:fill=")[^"]*(")`)
-		if fillRe.MatchString(block) {
-			block = fillRe.ReplaceAllString(block, `${1}`+hex+`${2}`)
+		if reFillAttr.MatchString(block) {
+			block = reFillAttr.ReplaceAllString(block, `${1}`+hex+`${2}`)
 		} else {
-			shdRe := regexp.MustCompile(`(?i)(<w:shd)`)
-			block = shdRe.ReplaceAllString(block, `${1} w:fill="`+hex+`"`)
+			block = reShdOpenTag.ReplaceAllString(block, `${1} w:fill="`+hex+`"`)
 		}
 
-		block = hexRe.ReplaceAllString(block, ``)
+		block = reHexColor.ReplaceAllString(block, ``)
 		block = strings.ReplaceAll(block, "<w:r><w:t></w:t></w:r>", "")
 
 		return block

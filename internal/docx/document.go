@@ -229,6 +229,12 @@ func extractFieldNamesRec(node parse.Node, out map[string]struct{}) {
 	}
 }
 
+var (
+	reDocPr        = regexp.MustCompile(`<wp:docPr\s+id="(\d+)"\s+name="Picture\s+(\d+)"\s*/>`)
+	reRId          = regexp.MustCompile(`"rId(\d+)"`)
+	reImagePrefix  = regexp.MustCompile(`^word/media/image`)
+)
+
 // TODO: use xml parsing instead of regex
 func ParseDocumentMeta(zm goziputils.ZipMap, tf template.FuncMap) (*documentMeta, error) {
 	d := documentMeta{
@@ -252,9 +258,7 @@ func ParseDocumentMeta(zm goziputils.ZipMap, tf template.FuncMap) (*documentMeta
 		return nil, fmt.Errorf("could not parse document settings: %w", err)
 	}
 
-	idAndPictureNRegEx := regexp.MustCompile(`<wp:docPr\s+id="(\d+)"\s+name="Picture\s+(\d+)"\s*/>`)
-
-	docPrAttrsMatches := idAndPictureNRegEx.FindAllStringSubmatch(string(documentContent), -1)
+	docPrAttrsMatches := reDocPr.FindAllStringSubmatch(string(documentContent), -1)
 	d.docPrIds = make([]uint32, 0, len(docPrAttrsMatches))
 	for _, m := range docPrAttrsMatches {
 		docPrId, err := strconv.ParseUint(m[1], 10, 32)
@@ -286,9 +290,7 @@ func ParseDocumentMeta(zm goziputils.ZipMap, tf template.FuncMap) (*documentMeta
 		return nil, fmt.Errorf("could not read zip file content: %w", err)
 	}
 
-	rIdNRegEx := regexp.MustCompile(`"rId(\d+)"`)
-
-	rIdMatches := rIdNRegEx.FindAllStringSubmatch(string(wordDocumentRelsContent), -1)
+	rIdMatches := reRId.FindAllStringSubmatch(string(wordDocumentRelsContent), -1)
 	for _, match := range rIdMatches {
 		num, err := strconv.ParseUint(match[1], 10, 64)
 		if err != nil {
@@ -302,7 +304,7 @@ func ParseDocumentMeta(zm goziputils.ZipMap, tf template.FuncMap) (*documentMeta
 
 	// work on word/media/images
 	for filename := range zm {
-		if !strings.HasPrefix(filename, "word/media/image") {
+		if !reImagePrefix.MatchString(filename) {
 			continue
 		}
 

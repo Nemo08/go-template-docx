@@ -9,11 +9,12 @@ import (
 	"strings"
 )
 
+var reSheetCell = regexp.MustCompile(`<c[^>]*r="([^"]+)"[^>]*t="s"[^>]*>.*?<v>(\d+)</v>.*?</c>`)
+
 // TODO: switch to xml parsing
 func UpdateSheet(fileContent []byte, numberCellsValues map[int]string, sharedStringsNewIndexes map[int]int) ([]byte, map[string]string, error) {
 	// Capture cell reference and shared string index
-	re := regexp.MustCompile(`<c[^>]*r="([^"]+)"[^>]*t="s"[^>]*>.*?<v>(\d+)</v>.*?</c>`)
-	matches := re.FindAllStringSubmatch(string(fileContent), -1)
+	matches := reSheetCell.FindAllStringSubmatch(string(fileContent), -1)
 
 	valuesByCell := make(map[string]string)
 

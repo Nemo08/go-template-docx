@@ -12,14 +12,17 @@ import (
 	goziputils "github.com/JJJJJJack/go-zip-utils"
 )
 
+var (
+	reChartBlock = regexp.MustCompile(`(?s)<c:f>(Sheet\d+!\$([A-Z]+)\$(\d+):\$[A-Z]+\$(\d+))</c:f>.*?<c:(?:strCache|numCache)>(.*?)</c:(?:strCache|numCache)>`)
+	reChartPt    = regexp.MustCompile(`(?s)<c:pt idx="(\d+)">.*?<c:v>(.*?)</c:v>.*?</c:pt>`)
+	reChartName  = regexp.MustCompile(`(chart\d+)\.xml`)
+)
+
 // TODO: parse and unmarshal xml instead of using regex
 func UpdateChart(fileContent []byte, cellAndValues map[string]string) ([]byte, error) {
-	// the blockRe captures both strCache and numCache because it would otherwise match the first <c:f>...</c:f> with the last <c:numCache>...</c:numCache>
-	blockRe := regexp.MustCompile(`(?s)<c:f>(Sheet\d+!\$([A-Z]+)\$(\d+):\$[A-Z]+\$(\d+))</c:f>.*?<c:(?:strCache|numCache)>(.*?)</c:(?:strCache|numCache)>`)
-	ptRe := regexp.MustCompile(`(?s)<c:pt idx="(\d+)">.*?<c:v>(.*?)</c:v>.*?</c:pt>`)
 
-	updated := blockRe.ReplaceAllFunc(fileContent, func(block []byte) []byte {
-		m := blockRe.FindSubmatch(block)
+	updated := reChartBlock.ReplaceAllFunc(fileContent, func(block []byte) []byte {
+		m := reChartBlock.FindSubmatch(block)
 		if len(m) < 6 {
 			return block
 		}
@@ -29,8 +32,8 @@ func UpdateChart(fileContent []byte, cellAndValues map[string]string) ([]byte, e
 		cache := string(m[5])                     // contents of <c:strCache> or <c:numCache>
 
 		// Iterate over <c:pt>
-		cacheUpdated := ptRe.ReplaceAllStringFunc(cache, func(pt string) string {
-			pm := ptRe.FindStringSubmatch(pt)
+		cacheUpdated := reChartPt.ReplaceAllStringFunc(cache, func(pt string) string {
+			pm := reChartPt.FindStringSubmatch(pt)
 			if len(pm) < 3 {
 				return pt
 			}
@@ -88,8 +91,7 @@ func ApplyTemplateToXml(f *zip.File, templateValues any, templateFuncs template.
 
 // ExtractChartFilename now only works with a single submatch
 func ExtractChartFilename(path string) (string, error) {
-	re := regexp.MustCompile(`(chart\d+)\.xml`)
-	matches := re.FindStringSubmatch(path)
+	matches := reChartName.FindStringSubmatch(path)
 	if len(matches) < 2 {
 		return "", fmt.Errorf("no chart name found")
 	}

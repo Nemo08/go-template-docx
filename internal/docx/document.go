@@ -6,6 +6,7 @@ import (
 	"encoding/xml"
 	"fmt"
 	"path"
+	"reflect"
 	"regexp"
 	"strconv"
 	"strings"
@@ -30,6 +31,7 @@ type documentMeta struct {
 	mediaMap           MediaMap
 	//Options
 	RemoveEmptyTableRows bool
+	RemoveRangeRows      bool
 	IgnoreMissingKey     bool
 }
 
@@ -187,6 +189,11 @@ func extractFieldNamesRec(node parse.Node, out map[string]struct{}) {
 	if node == nil {
 		return
 	}
+	// Go-ловушка: интерфейс может содержать тип, но nil-указатель -
+	// тогда node == nil не срабатывает, но обращение к полям вызывает панику.
+	if v := reflect.ValueOf(node); v.Kind() == reflect.Ptr && v.IsNil() {
+		return
+	}
 	switch n := node.(type) {
 	case *parse.ListNode:
 		for _, elem := range n.Nodes {
@@ -322,6 +329,11 @@ func (d *documentMeta) ApplyTemplate(f *zip.File, zipWriter *zip.Writer, data an
 	}
 
 	documentXml = []byte(PatchXml(string(documentXml)))
+	// Маркируем строки с директивами ПОСЛЕ PatchXml — только тогда {{ }}
+	// гарантированно не разбиты по нескольким XML-тегам.
+	if d.RemoveRangeRows {
+		documentXml = []byte(markRangeDirectiveRows(string(documentXml)))
+	}
 
 	tplOption := "missingkey=error"
 	if d.IgnoreMissingKey {
@@ -369,6 +381,9 @@ func (d *documentMeta) ApplyTemplate(f *zip.File, zipWriter *zip.Writer, data an
 
 	if d.RemoveEmptyTableRows {
 		output = removeEmptyTableRows(output)
+	}
+	if d.RemoveRangeRows {
+		output = removeMarkedEmptyRows(output)
 	}
 
 	err = goziputils.RewriteFileIntoZipWriter(zipWriter, f, []byte(output))

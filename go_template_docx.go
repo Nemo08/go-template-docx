@@ -32,6 +32,7 @@ type docxTemplate struct {
 	filesPostProcessors []xml.HandlersMap
 	//Options
 	removeEmptyTableRows bool //remove empty table rows in template
+	removeRangeRows      bool //remove empty rows left by {{range}}/{{end}} directives
 	ignoreMissingKey     bool
 	// warnOnMissingKey — если true, при обработке шаблона выводит предупреждение
 	// в консоль для каждого плейсхолдера, которого нет в переданных данных.
@@ -306,6 +307,7 @@ func (dt *docxTemplate) Apply(templateValues any) error {
 
 	//set options
 	document.RemoveEmptyTableRows = dt.removeEmptyTableRows
+	document.RemoveRangeRows = dt.removeRangeRows
 	document.IgnoreMissingKey = dt.ignoreMissingKey
 
 	// put loaded medias into the new docx file, following docx naming convention with sequential numbers
@@ -618,6 +620,16 @@ func WithFilename(name string) TemplateOption {
 func NoRemoveEmptyTableRows() TemplateOption {
 	return func(t *docxTemplate) {
 		t.removeEmptyTableRows = false
+	}
+}
+
+// RemoveRangeRows удаляет строки таблицы, которые содержали директивы
+// {{range}} или {{end}} и после выполнения шаблона оказались пустыми.
+// Обычные пустые строки, не связанные с range, остаются нетронутыми.
+// Совместима с NoRemoveEmptyTableRows — обе опции можно использовать вместе.
+func RemoveRangeRows() TemplateOption {
+	return func(t *docxTemplate) {
+		t.removeRangeRows = true
 	}
 }
 

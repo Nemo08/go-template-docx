@@ -1,22 +1,26 @@
 package xlsx
 
 import (
-	"archive/zip"
 	"bytes"
 	"fmt"
 	"text/template"
 
-	"github.com/JJJJJJack/go-template-docx/internal/docx"
+	"github.com/JJJJJJack/go-template-docx/internal/xmlutil"
 )
 
 // ApplyTemplateToCells applies the templateValues to the given file content and returns the modified content.
-func ApplyTemplateToCells(f *zip.File, templateValues any, fileContent []byte) ([]byte, error) {
-	tmpl, err := template.New(f.Name).
-		Option("missingkey=error").
+func ApplyTemplateToCells(name string, fileContent []byte, templateValues any, ignoreMissingKey bool) ([]byte, error) {
+	opt := "missingkey=error"
+	if ignoreMissingKey {
+		opt = "missingkey=zero"
+	}
+
+	tmpl, err := template.New(name).
+		Option(opt).
 		Funcs(template.FuncMap{
 			"toNumberCell": ToNumberCell,
 		}).
-		Parse(docx.PatchXml(string(fileContent)))
+		Parse(xmlutil.PatchXml(string(fileContent)))
 	if err != nil {
 		return nil, fmt.Errorf("unable to parse template: %w", err)
 	}

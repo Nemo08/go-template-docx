@@ -15,8 +15,20 @@ import (
 
 	"github.com/JJJJJJack/go-template-docx/internal/docx"
 	docxtemplate "github.com/JJJJJJack/go-template-docx/internal/template"
+	"github.com/JJJJJJack/go-template-docx/internal/xmlutil"
+	"github.com/JJJJJJack/go-template-docx/internal/zio"
 	"github.com/JJJJJJack/go-template-docx/xml"
-	goziputils "github.com/JJJJJJack/go-zip-utils"
+)
+
+var (
+	reChartsPath      = regexp.MustCompile(`word/charts/chart\d*?\.xml`)
+	reXlsxEmbedded    = regexp.MustCompile(`/embeddings/Microsoft_Excel_Worksheet\d*?\.xlsx`)
+	reHeaderFooterDoc = regexp.MustCompile(`word/(header|footer|document)\d*?\.xml`)
+
+	defaultSkipFilter = orFilter(
+		matchPath(docx.DocumentRelsPath, docx.ContentTypesPath),
+		matchRe(reChartsPath, reXlsxEmbedded, reHeaderFooterDoc),
+	)
 )
 
 type docxTemplate struct {
@@ -42,9 +54,7 @@ type docxTemplate struct {
 	filename string
 }
 
-// copyTemplateFuncs создаёт независимую копию FuncMap.
-// Необходимо чтобы каждый экземпляр docxTemplate имел свою map
-// и не было гонки при параллельном вызове AddTemplateFuncs из горутин.
+// copyTemplateFuncs creates a copy of the template.FuncMap.
 func copyTemplateFuncs(src template.FuncMap) template.FuncMap {
 	dst := make(template.FuncMap, len(src))
 	for k, v := range src {
@@ -53,18 +63,7 @@ func copyTemplateFuncs(src template.FuncMap) template.FuncMap {
 	return dst
 }
 
-// NewDocxTemplateFromBytes creates a new docxTemplate object from the provided DOCX file bytes.
-// The docxTemplate object can be used through the exposed high-level APIs.
-// FIX: added options variadic parameter (was missing, unlike NewDocxTemplateFromFilename)
-func NewDocxTemplateFromBytes(docxBytes []byte, options ...TemplateOption) (*docxTemplate, error) {
-	inputBuffer := bytes.Buffer{}
-
-	_, err := inputBuffer.Write(docxBytes)
-	if err != nil {
-		return nil, fmt.Errorf("unable to write DOCX bytes to buffer: %w", err)
-	}
-
-	// FIX: initialise defaults consistently with NewDocxTemplateFromFilename
+func newDocxTemplate(inputBuffer bytes.Buffer, filename string, options ...TemplateOption) *docxTemplate {
 	tpl := &docxTemplate{
 		input:                inputBuffer,
 		output:               bytes.Buffer{},
@@ -79,17 +78,29 @@ func NewDocxTemplateFromBytes(docxBytes []byte, options ...TemplateOption) (*doc
 		ignoreMissingKey:     false,
 		warnOnMissingKey:     false,
 		missingKeyLogger:     slog.New(slog.NewTextHandler(os.Stderr, nil)),
+		filename:             filename,
 	}
 
 	for _, opt := range options {
 		opt(tpl)
 	}
 
-	return tpl, nil
+	return tpl
 }
 
-// NewDocxTemplateFromFilename creates a new docxTemplate object from the provided DOCX filename (reading from disk).
-// The docxTemplate object can be used through the exposed high-level APIs.
+// NewDocxTemplateFromBytes creates a new docxTemplate object from the provided DOCX file bytes.
+func NewDocxTemplateFromBytes(docxBytes []byte, options ...TemplateOption) (*docxTemplate, error) {
+	inputBuffer := bytes.Buffer{}
+
+	_, err := inputBuffer.Write(docxBytes)
+	if err != nil {
+		return nil, fmt.Errorf("unable to write DOCX bytes to buffer: %w", err)
+	}
+
+	return newDocxTemplate(inputBuffer, "", options...), nil
+}
+
+// NewDocxTemplateFromFilename creates a new docxTemplate object from the provided DOCX filename.
 func NewDocxTemplateFromFilename(docxFilename string, options ...TemplateOption) (*docxTemplate, error) {
 	docxBytes, err := os.ReadFile(docxFilename)
 	if err != nil {
@@ -102,71 +113,36 @@ func NewDocxTemplateFromFilename(docxFilename string, options ...TemplateOption)
 		return nil, fmt.Errorf("unable to write DOCX bytes to buffer: %w", err)
 	}
 
-	tpl := &docxTemplate{
-		input:               inputBuffer,
-		output:              bytes.Buffer{},
-		media:               docx.MediaMap{},
-		rel:                 &docx.Relationship{},
-		relMedia:            []docx.MediaRel{},
-		xlsxChartsMeta:      make(xlsxChartsMap),
-		templateFuncs:       copyTemplateFuncs(docx.TemplateFuncs),
-		filesPreProcessors:  []xml.HandlersMap{},
-		filesPostProcessors: []xml.HandlersMap{},
-
-		removeEmptyTableRows: true,
-		ignoreMissingKey:     false,
-		warnOnMissingKey:     false,
-		missingKeyLogger:     slog.New(slog.NewTextHandler(os.Stderr, nil)),
-		filename:             docxFilename,
-	}
-
-	for _, opt := range options {
-		opt(tpl)
-	}
-
-	return tpl, nil
+	return newDocxTemplate(inputBuffer, docxFilename, options...), nil
 }
 
 // Media adds a media file to the docxTemplate object.
-// Supported media types are currently limited to JPEG and PNG images.
-// The filename match the string you pass in the template expression using the image function.
-// For example {{ image "computer.png" }} will load the docx.Media that have "computer.png" as its filename.
-// The data should be the byte content of the media file.
 func (dt *docxTemplate) Media(filename string, data []byte) {
 	filename = filepath.Base(filename)
 
 	dt.media[filename] = &docx.Media{
 		Data: data,
-		// Word media folder name (e.g., "image1.png") will be assigned after parsing the document metadata
 	}
 }
 
-// AddTemplateFuncs adds your custom template functions to evaluate when applying the template.
-// Existing functions will be shadowed if the same name is used.
+// AddTemplateFuncs adds custom template functions.
 func (dt *docxTemplate) AddTemplateFuncs(funcMap template.FuncMap) {
 	for funcName, fn := range funcMap {
 		dt.templateFuncs[funcName] = fn
 	}
 }
 
-// AddPreProcessors adds XML pre-processing maps in which the key is the XML file path
-// (e.g., "word/document.xml") and the value is a list of functions that overwrite it sequentially,
-// before the template is applied.
+// AddPreProcessors adds XML pre-processing maps.
 func (dt *docxTemplate) AddPreProcessors(filesPreProcessors ...xml.HandlersMap) {
 	dt.filesPreProcessors = append(dt.filesPreProcessors, filesPreProcessors...)
 }
 
-// AddPostProcessors adds XML post-processing maps in which the key is the XML file path
-// (e.g., "word/document.xml") and the value is a list of functions that overwrite it sequentially,
-// after the template is applied.
+// AddPostProcessors adds XML post-processing maps.
 func (dt *docxTemplate) AddPostProcessors(filesPostProcessors ...xml.HandlersMap) {
 	dt.filesPostProcessors = append(dt.filesPostProcessors, filesPostProcessors...)
 }
 
-// warnMissingKeysInFile сравнивает переменные шаблона из конкретного XML-файла
-// с плоским представлением данных и выводит предупреждение для каждого
-// отсутствующего ключа. В лог пишется имя исходного .docx файла (dt.filename).
-// Вызывается только при warnOnMissingKey == true.
+// warnMissingKeysInFile compares template variables with data and warns about missing keys.
 func (dt *docxTemplate) warnMissingKeysInFile(tmpl *template.Template, data map[string]any) {
 	docxName := dt.filename
 	if docxName == "" {
@@ -174,12 +150,10 @@ func (dt *docxTemplate) warnMissingKeysInFile(tmpl *template.Template, data map[
 	}
 	vars := docxtemplate.ExtractAllVariables(tmpl)
 	for v := range vars {
-		// Переменные вида ".Field" или ".Field.Sub" — проверяем верхний уровень.
 		key := strings.TrimPrefix(v, ".")
 		if idx := strings.Index(key, "."); idx != -1 {
 			key = key[:idx]
 		}
-		// Пропускаем служебные переменные Go-шаблонов ($var)
 		if strings.HasPrefix(key, "$") || key == "" {
 			continue
 		}
@@ -189,8 +163,7 @@ func (dt *docxTemplate) warnMissingKeysInFile(tmpl *template.Template, data map[
 	}
 }
 
-// toStringMap пытается привести templateValues к map[string]any для проверки ключей.
-// Если значение не является map — возвращает nil (предупреждения не выводятся).
+// toStringMap converts templateValues to map[string]any for key checking.
 func toStringMap(templateValues any) map[string]any {
 	switch v := templateValues.(type) {
 	case map[string]any:
@@ -211,7 +184,6 @@ func toStringMap(templateValues any) map[string]any {
 		}
 		return m
 	default:
-		// Пробуем через JSON round-trip (например, если передана struct)
 		b, err := json.Marshal(v)
 		if err != nil {
 			return nil
@@ -224,375 +196,434 @@ func toStringMap(templateValues any) map[string]any {
 	}
 }
 
-// GetTemplateVariables extracts and returns all template variables used in the DOCX file
-// as a map.
+// GetTemplateVariables extracts all template variables from the DOCX file.
 func (dt *docxTemplate) GetTemplateVariables() (map[string]struct{}, error) {
-	zipMap, err := goziputils.NewZipMapFromBytes(dt.input.Bytes())
+	src, err := zio.NewFromBytes(dt.input.Bytes())
 	if err != nil {
-		return nil, fmt.Errorf("unable to create DOCX zip map: %w", err)
+		return nil, fmt.Errorf("unable to create DOCX zip source: %w", err)
 	}
 
 	vars := map[string]struct{}{}
-	for _, f := range zipMap {
-		b, err := goziputils.ReadZipFileContent(f)
+	err = src.Each(func(name string) error {
+		b, found, err := src.ReadFile(name)
 		if err != nil {
-			return nil, fmt.Errorf("unable to read file '%s': %w", f.Name, err)
+			return fmt.Errorf("unable to read file '%s': %w", name, err)
+		}
+		if !found {
+			return nil
 		}
 
-		tmpl, err := template.New(path.Base(f.Name)).Funcs(dt.templateFuncs).Parse(docx.PatchXml(string(b)))
+		tmpl, err := template.New(path.Base(name)).Funcs(dt.templateFuncs).Parse(xmlutil.PatchXml(string(b)))
 		if err != nil {
-			return nil, fmt.Errorf("unable to parse template in file '%s': %w", f.Name, err)
+			return fmt.Errorf("unable to parse template in file '%s': %w", name, err)
 		}
 
 		x := docxtemplate.ExtractAllVariables(tmpl)
 		for k := range x {
 			vars[k] = struct{}{}
 		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
 
 	return vars, nil
 }
 
-// Apply applies the template with the provided values to the DOCX file.
-// The templateValues parameter can be any type that can be marshalled to JSON.
-func (dt *docxTemplate) Apply(templateValues any) error {
+// normalizeTemplateValues converts templateValues to a consistent map[string]any form.
+func (dt *docxTemplate) normalizeTemplateValues(templateValues any) any {
 	switch v := templateValues.(type) {
 	case []byte:
 		if len(v) == 0 {
-			templateValues = map[string]any{}
-			break
+			return map[string]any{}
 		}
-		err := json.Unmarshal(v, &templateValues)
-		if err != nil {
-			return fmt.Errorf("error unmarshalling templateValues: %w", err)
+		var m map[string]any
+		if err := json.Unmarshal(v, &m); err != nil {
+			return v
 		}
-		// После анмаршала nil-значения рендерятся как "<no value>" что ломает XML.
-		// Заменяем nil → "" на верхнем уровне map.
-		if m, ok := templateValues.(map[string]any); ok {
-			for k, val := range m {
-				if val == nil {
-					m[k] = ""
-				}
+		for k, val := range m {
+			if val == nil {
+				m[k] = ""
 			}
 		}
+		return m
 	case map[string]string:
-		// Конвертируем map[string]string → map[string]any чтобы при missingkey=zero
-		// отсутствующий ключ рендерился как "" а не как "<no value>", что ломает XML.
 		m := make(map[string]any, len(v))
 		for k, val := range v {
 			m[k] = val
 		}
-		templateValues = m
+		return m
 	}
+	return templateValues
+}
 
-	// custom user pre processing
-	if len(dt.filesPreProcessors) > 0 {
-		err := xml.ProcessedOutput(dt.filesPreProcessors, &dt.input, "pre")
-		if err != nil {
-			return fmt.Errorf("unable to pre-process output DOCX file: %w", err)
+// fileFilter is a predicate that returns true when a file should be skipped.
+type fileFilter func(name string) bool
+
+// orFilter combines multiple fileFilter predicates with OR logic.
+func orFilter(filters ...fileFilter) fileFilter {
+	return func(name string) bool {
+		for _, f := range filters {
+			if f(name) {
+				return true
+			}
 		}
+		return false
 	}
+}
 
-	zipWriter := zip.NewWriter(&dt.output)
+func matchPath(patterns ...string) fileFilter {
+	return func(name string) bool {
+		for _, p := range patterns {
+			if name == p {
+				return true
+			}
+		}
+		return false
+	}
+}
 
-	docxZipMap, err := goziputils.NewZipMapFromBytes(dt.input.Bytes())
+func matchRe(re... *regexp.Regexp) fileFilter {
+	return func(name string) bool {
+		for _, r := range re {
+			if r.MatchString(name) {
+				return true
+			}
+		}
+		return false
+	}
+}
+
+// copyNonTemplateFiles copies all unmodified files, skipping those matching the filter.
+func copyNonTemplateFiles(zipWriter *zip.Writer, src zio.FileSource, skip fileFilter) error {
+	return src.Each(func(filename string) error {
+		if skip(filename) {
+			return nil
+		}
+		return zio.CopyToZip(zipWriter, src, filename)
+	})
+}
+
+// updateContentTypes adds media type entries for loaded images.
+func (dt *docxTemplate) updateContentTypes(zipWriter *zip.Writer, src zio.FileSource) error {
+	ctData, found, err := src.ReadFile(docx.ContentTypesPath)
 	if err != nil {
-		return fmt.Errorf("unable to create DOCX zip map: %w", err)
+		return fmt.Errorf("unable to read content types file '%s': %w", docx.ContentTypesPath, err)
 	}
-
-	document, err := docx.ParseDocumentMeta(docxZipMap, dt.templateFuncs)
-	if err != nil {
-		return fmt.Errorf("unable to parse document metadata: %w", err)
+	if !found {
+		return fmt.Errorf("content types file '%s' not found", docx.ContentTypesPath)
 	}
-
-	//set options
-	document.RemoveEmptyTableRows = dt.removeEmptyTableRows
-	document.RemoveRangeRows = dt.removeRangeRows
-	document.IgnoreMissingKey = dt.ignoreMissingKey
-
-	// put loaded medias into the new docx file, following docx naming convention with sequential numbers
-	for filename, media := range dt.media {
-		// assign each filename to its word convention equivalent path "word/media/imageN.ext"
-		imageN := document.NextImageNumber()
-		wordFilename := fmt.Sprintf("image%d%s", imageN, path.Ext(filename))
-
-		dt.media[filename].WordFilename = wordFilename
-
-		filepath := path.Join("word/media", media.WordFilename)
-		err := goziputils.WriteFile(zipWriter, filepath, media.Data)
-		if err != nil {
-			return fmt.Errorf("unable to write media file '%s': %w", filepath, err)
-		}
-	}
-	document.SetMediaMap(dt.media)
-
-	// Copy all files except the ones that will be processed
-	documentRelsFilename := "word/_rels/document.xml.rels"
-	contentTypesFilename := "[Content_Types].xml"
-	chartsMatcher := regexp.MustCompile(`word/charts/chart\d*?\.xml`)
-	xlsxMatcher := regexp.MustCompile(`/embeddings/Microsoft_Excel_Worksheet\d*?\.xlsx`)
-	headerFooterDocumentMatcher := regexp.MustCompile(`word/(header|footer|document)\d*?\.xml`)
-	for filename, f := range docxZipMap {
-		switch {
-		case
-			filename == documentRelsFilename,
-			filename == contentTypesFilename,
-			chartsMatcher.MatchString(filename),
-			xlsxMatcher.MatchString(filename),
-			headerFooterDocumentMatcher.MatchString(filename):
-			continue
-		}
-
-		err := goziputils.CopyFile(zipWriter, f)
-		if err != nil {
-			return fmt.Errorf("unable to copy original file '%s': %w", f.Name, err)
-		}
-	}
-
-	// Edit [Content_Types].xml if media files are provided
-	ctFile := docxZipMap[contentTypesFilename]
-	ctData, err := goziputils.ReadZipFileContent(ctFile)
-	if err != nil {
-		return fmt.Errorf("unable to read content types file '%s': %w", ctFile.Name, err)
-	}
-
 	contentTypes, err := docx.ParseContentTypes(ctData)
 	if err != nil {
-		return fmt.Errorf("unable to parse content types file '%s': %w", ctFile.Name, err)
+		return fmt.Errorf("unable to parse content types file '%s': %w", docx.ContentTypesPath, err)
 	}
-
 	for filename := range dt.media {
 		ext := path.Ext(filename)
-
 		switch lowerExt := strings.ToLower(ext); lowerExt {
 		case ".jpg", ".jpeg", ".jfif":
 			contentTypes.AddDefaultUnique(lowerExt[1:], "image/jpeg")
 		case ".png":
 			contentTypes.AddDefaultUnique("png", "image/png")
-		default:
-			// Неподдерживаемый тип — тихо пропускаем, не засоряем stdout.
-			continue
 		}
 	}
-
 	updatedCt, err := contentTypes.ToXml()
 	if err != nil {
 		return fmt.Errorf("unable to marshal content types to XML: %w", err)
 	}
+	return zio.RewriteToZip(zipWriter, src, docx.ContentTypesPath, []byte(updatedCt))
+}
 
-	err = goziputils.RewriteFileIntoZipWriter(zipWriter, ctFile, []byte(updatedCt))
+// parseDocumentRels parses the document relationships file.
+func (dt *docxTemplate) parseDocumentRels(src zio.FileSource) error {
+	relData, found, err := src.ReadFile(docx.DocumentRelsPath)
 	if err != nil {
-		return fmt.Errorf("unable to replace content types file '%s': %w", ctFile.Name, err)
+		return fmt.Errorf("unable to read rel file '%s': %w", docx.DocumentRelsPath, err)
 	}
-
-	relData, err := goziputils.ReadZipFileContent(docxZipMap[documentRelsFilename])
-	if err != nil {
-		return fmt.Errorf("unable to read rel file '%s': %w", documentRelsFilename, err)
+	if !found {
+		return fmt.Errorf("rel file '%s' not found", docx.DocumentRelsPath)
 	}
-
 	dt.rel, err = docx.ParseRelationship(relData)
 	if err != nil {
-		return fmt.Errorf("unable to parse rel file '%s': %w", documentRelsFilename, err)
+		return fmt.Errorf("unable to parse rel file '%s': %w", docx.DocumentRelsPath, err)
 	}
+	return nil
+}
 
-	// Map chart files to their target XLSX files
+// buildChartXlsxMap maps chart filenames to their target XLSX embedded files.
+func buildChartXlsxMap(src zio.FileSource) (map[string]string, error) {
 	chartRelToTargetXlsx := make(map[string]string)
 	for i := 1; ; i++ {
-		relsChartFilename := fmt.Sprintf("word/charts/_rels/chart%d.xml.rels", i)
-		f := docxZipMap[relsChartFilename]
-		if f == nil {
+		relsChartFilename := fmt.Sprintf(docx.ChartRelsPathFormat, i)
+		fileContent, found, err := src.ReadFile(relsChartFilename)
+		if err != nil {
+			return nil, fmt.Errorf("unable to read chart rel file '%s': %w", relsChartFilename, err)
+		}
+		if !found {
 			break
 		}
-
-		fileContent, err := goziputils.ReadZipFileContent(f)
-		if err != nil {
-			return fmt.Errorf("unable to read chart rel file '%s': %w", f.Name, err)
-		}
-
 		chartsRelationships, _ := docx.ParseRelationship(fileContent)
 		for _, relationship := range chartsRelationships.Relationships {
-			if !xlsxMatcher.MatchString(relationship.Target) {
+			if !reXlsxEmbedded.MatchString(relationship.Target) {
 				continue
 			}
-
 			targetXlsxFilename := strings.Replace(relationship.Target, "../", "word/", 1)
-			chartFilename, err := docx.ExtractChartFilename(f.Name)
+			chartFilename, err := docx.ExtractChartFilename(relsChartFilename)
 			if err != nil {
-				return fmt.Errorf("unable to extract chart name from file '%s': %w", f.Name, err)
+				return nil, fmt.Errorf("unable to extract chart name from file '%s': %w", relsChartFilename, err)
 			}
 			chartRelToTargetXlsx[chartFilename] = targetXlsxFilename
 		}
 	}
+	return chartRelToTargetXlsx, nil
+}
 
-	// Apply template to the XLSX files
+// processXlsxFiles applies templates to all embedded XLSX files.
+func (dt *docxTemplate) processXlsxFiles(zipWriter *zip.Writer, src zio.FileSource, templateValues any) error {
 	for i := 0; ; i++ {
-		xlsxFilename := fmt.Sprintf("word/embeddings/Microsoft_Excel_Worksheet%d.xlsx", i)
+		xlsxFilename := fmt.Sprintf(docx.XlsxPathFormat, i)
 		if i == 0 {
-			xlsxFilename = "word/embeddings/Microsoft_Excel_Worksheet.xlsx"
+			xlsxFilename = docx.XlsxFirstPath
 		}
-		f := docxZipMap[xlsxFilename]
-		if f == nil {
+		xlsxData, found, err := src.ReadFile(xlsxFilename)
+		if err != nil {
+			return fmt.Errorf("unable to read XLSX file '%s': %w", xlsxFilename, err)
+		}
+		if !found {
 			break
 		}
-
-		err := dt.writeXlsxIntoZip(f, zipWriter, templateValues)
-		if err != nil {
-			return fmt.Errorf("unable to apply template to XLSX file '%s': %w", f.Name, err)
+		if err := dt.writeXlsxIntoZip(zipWriter, src, xlsxFilename, xlsxData, templateValues, dt.ignoreMissingKey); err != nil {
+			return fmt.Errorf("unable to apply template to XLSX file '%s': %w", xlsxFilename, err)
 		}
 	}
+	return nil
+}
 
-	// Если включены предупреждения о пропущенных ключах — один раз конвертируем
-	// данные в map для последующих проверок по каждому файлу.
-	var warnDataMap map[string]any
-	if dt.warnOnMissingKey {
-		warnDataMap = toStringMap(templateValues)
+// warnMissingKeysForFile warns about missing template keys in a file.
+func (dt *docxTemplate) warnMissingKeysForFile(name string, src zio.FileSource, warnDataMap map[string]any) {
+	if !dt.warnOnMissingKey || warnDataMap == nil {
+		return
 	}
+	b, found, err := src.ReadFile(name)
+	if err != nil || !found {
+		return
+	}
+	tmpl, err := template.New(path.Base(name)).Funcs(dt.templateFuncs).Parse(xmlutil.PatchXml(string(b)))
+	if err != nil {
+		return
+	}
+	dt.warnMissingKeysInFile(tmpl, warnDataMap)
+}
 
-	// Apply template to the header files
+// processHeadersFootersDocument applies templates to header, footer, and main document files.
+func (dt *docxTemplate) processHeadersFootersDocument(zipWriter *zip.Writer, src zio.FileSource, applyTemplate func(name string, content []byte, data any) ([]byte, []docx.MediaRel, error), templateValues any, warnDataMap map[string]any) error {
 	for i := 1; ; i++ {
-		headerFilename := fmt.Sprintf("word/header%d.xml", i)
-		f := docxZipMap[headerFilename]
-		if f == nil {
+		headerName := fmt.Sprintf(docx.HeaderPathFormat, i)
+		data, found, err := src.ReadFile(headerName)
+		if err != nil {
+			return fmt.Errorf("unable to read header file '%s': %w", headerName, err)
+		}
+		if !found {
 			break
 		}
-
-		if dt.warnOnMissingKey && warnDataMap != nil {
-			if b, err2 := goziputils.ReadZipFileContent(f); err2 == nil {
-				if tmpl, err2 := template.New(path.Base(f.Name)).Funcs(dt.templateFuncs).Parse(docx.PatchXml(string(b))); err2 == nil {
-					dt.warnMissingKeysInFile(tmpl, warnDataMap)
-				}
-			}
-		}
-
-		media, err := document.ApplyTemplate(f, zipWriter, templateValues)
+		dt.warnMissingKeysForFile(headerName, src, warnDataMap)
+		output, media, err := applyTemplate(headerName, data, templateValues)
 		if err != nil {
-			return fmt.Errorf("unable to apply template to header file '%s': %w", f.Name, err)
+			return fmt.Errorf("unable to apply template to header file '%s': %w", headerName, err)
 		}
-
 		dt.relMedia = append(dt.relMedia, media...)
+		if err := zio.RewriteToZip(zipWriter, src, headerName, output); err != nil {
+			return fmt.Errorf("unable to write header file '%s': %w", headerName, err)
+		}
 	}
-
-	// Apply template to the footer files
 	for i := 1; ; i++ {
-		footerFilename := fmt.Sprintf("word/footer%d.xml", i)
-		f := docxZipMap[footerFilename]
-		if f == nil {
+		footerName := fmt.Sprintf(docx.FooterPathFormat, i)
+		data, found, err := src.ReadFile(footerName)
+		if err != nil {
+			return fmt.Errorf("unable to read footer file '%s': %w", footerName, err)
+		}
+		if !found {
 			break
 		}
-
-		if dt.warnOnMissingKey && warnDataMap != nil {
-			if b, err2 := goziputils.ReadZipFileContent(f); err2 == nil {
-				if tmpl, err2 := template.New(path.Base(f.Name)).Funcs(dt.templateFuncs).Parse(docx.PatchXml(string(b))); err2 == nil {
-					dt.warnMissingKeysInFile(tmpl, warnDataMap)
-				}
-			}
-		}
-
-		media, err := document.ApplyTemplate(f, zipWriter, templateValues)
+		dt.warnMissingKeysForFile(footerName, src, warnDataMap)
+		output, media, err := applyTemplate(footerName, data, templateValues)
 		if err != nil {
-			return fmt.Errorf("unable to apply template to footer file '%s': %w", f.Name, err)
+			return fmt.Errorf("unable to apply template to footer file '%s': %w", footerName, err)
 		}
-
 		dt.relMedia = append(dt.relMedia, media...)
-	}
-
-	// Apply template to the main document file
-	documentFile := docxZipMap["word/document.xml"]
-	if documentFile == nil {
-		return fmt.Errorf("word/document.xml not found in the DOCX file")
-	}
-
-	if dt.warnOnMissingKey && warnDataMap != nil {
-		if b, err2 := goziputils.ReadZipFileContent(documentFile); err2 == nil {
-			if tmpl, err2 := template.New(path.Base(documentFile.Name)).Funcs(dt.templateFuncs).Parse(docx.PatchXml(string(b))); err2 == nil {
-				dt.warnMissingKeysInFile(tmpl, warnDataMap)
-			}
+		if err := zio.RewriteToZip(zipWriter, src, footerName, output); err != nil {
+			return fmt.Errorf("unable to write footer file '%s': %w", footerName, err)
 		}
 	}
-
-	media, err := document.ApplyTemplate(documentFile, zipWriter, templateValues)
+	documentData, found, err := src.ReadFile(docx.DocumentXMLPath)
+	if err != nil {
+		return fmt.Errorf("unable to read document file: %w", err)
+	}
+	if !found {
+		return fmt.Errorf("%s not found in the DOCX file", docx.DocumentXMLPath)
+	}
+	dt.warnMissingKeysForFile(docx.DocumentXMLPath, src, warnDataMap)
+	output, media, err := applyTemplate(docx.DocumentXMLPath, documentData, templateValues)
 	if err != nil {
 		return fmt.Errorf("unable to apply template to document file: %w", err)
 	}
-
 	dt.relMedia = append(dt.relMedia, media...)
+	if err := zio.RewriteToZip(zipWriter, src, docx.DocumentXMLPath, output); err != nil {
+		return fmt.Errorf("unable to write document file: %w", err)
+	}
+	return nil
+}
 
-	// Apply template to the chart files
+// processChartFiles applies templates and updates chart data for all chart XML files.
+func (dt *docxTemplate) processChartFiles(zipWriter *zip.Writer, src zio.FileSource, chartRelToTargetXlsx map[string]string, templateValues any, warnDataMap map[string]any) error {
 	for i := 1; ; i++ {
-		chartN := fmt.Sprintf("word/charts/chart%d.xml", i)
-
-		f := docxZipMap[chartN]
-		if f == nil {
+		chartN := fmt.Sprintf(docx.ChartPathFormat, i)
+		chartContent, found, err := src.ReadFile(chartN)
+		if err != nil {
+			return fmt.Errorf("unable to read chart file '%s': %w", chartN, err)
+		}
+		if !found {
 			break
 		}
+		dt.warnMissingKeysForFile(chartN, src, warnDataMap)
 
-		// FIX: pass ignoreMissingKey so chart templates respect the same option
-		// as document/header/footer templates. Previously this flag was ignored
-		// for chart files, causing a panic/error when a placeholder was absent
-		// from the supplied data.
-		if dt.warnOnMissingKey && warnDataMap != nil {
-			if b, err2 := goziputils.ReadZipFileContent(f); err2 == nil {
-				if tmpl, err2 := template.New(path.Base(f.Name)).Funcs(dt.templateFuncs).Parse(docx.PatchXml(string(b))); err2 == nil {
-					dt.warnMissingKeysInFile(tmpl, warnDataMap)
-				}
-			}
-		}
-
-		fileContent, err := docx.ApplyTemplateToXml(f, templateValues, dt.templateFuncs, dt.ignoreMissingKey)
+		fileContent, err := docx.ApplyTemplateToXml(chartN, chartContent, templateValues, dt.templateFuncs, dt.ignoreMissingKey)
 		if err != nil {
-			return fmt.Errorf("unable to apply template to chart file '%s': %w", f.Name, err)
+			return fmt.Errorf("unable to apply template to chart file '%s': %w", chartN, err)
 		}
-
-		chartFilename, err := docx.ExtractChartFilename(f.Name)
+		chartFilename, err := docx.ExtractChartFilename(chartN)
 		if err != nil {
-			return fmt.Errorf("unable to extract chart name from file '%s': %w", f.Name, err)
+			return fmt.Errorf("unable to extract chart name from file '%s': %w", chartN, err)
 		}
-
 		xlsxFileTarget := chartRelToTargetXlsx[chartFilename]
 		fileContent, err = docx.UpdateChart(fileContent, dt.xlsxChartsMeta[xlsxFileTarget])
 		if err != nil {
-			return fmt.Errorf("unable to update preview chart file '%s': %w", f.Name, err)
+			return fmt.Errorf("unable to update preview chart file '%s': %w", chartN, err)
 		}
-
-		err = goziputils.RewriteFileIntoZipWriter(zipWriter, f, fileContent)
-		if err != nil {
-			return fmt.Errorf("unable to rewrite chart file '%s': %w", f.Name, err)
+		if err := zio.RewriteToZip(zipWriter, src, chartN, fileContent); err != nil {
+			return fmt.Errorf("unable to rewrite chart file '%s': %w", chartN, err)
 		}
 	}
+	return nil
+}
 
-	documentRelFile := docxZipMap[documentRelsFilename]
-	documentRelContent, err := goziputils.ReadZipFileContent(documentRelFile)
+// updateDocumentRels rewrites the document relationships file with any new media references.
+func (dt *docxTemplate) updateDocumentRels(zipWriter *zip.Writer, src zio.FileSource) error {
+	documentRelContent, found, err := src.ReadFile(docx.DocumentRelsPath)
 	if err != nil {
-		return fmt.Errorf("unable to read rel file '%s': %w", documentRelsFilename, err)
+		return fmt.Errorf("unable to read rel file '%s': %w", docx.DocumentRelsPath, err)
 	}
-
+	if !found {
+		return fmt.Errorf("rel file '%s' not found", docx.DocumentRelsPath)
+	}
 	if len(dt.relMedia) != 0 {
 		dt.rel.AddMediaToRels(dt.relMedia)
-
 		documentRelContent, err = dt.rel.ToXml()
 		if err != nil {
 			return fmt.Errorf("unable to marshal rels: %w", err)
 		}
 	}
+	return zio.RewriteToZip(zipWriter, src, docx.DocumentRelsPath, documentRelContent)
+}
 
-	err = goziputils.RewriteFileIntoZipWriter(zipWriter, documentRelFile, documentRelContent)
+// applyTemplatePipeline runs the core template pipeline: parse input, apply template, write output.
+func (dt *docxTemplate) applyTemplatePipeline(templateValues any) error {
+	zipWriter := zip.NewWriter(&dt.output)
+
+	src, err := zio.NewFromBytes(dt.input.Bytes())
 	if err != nil {
-		return fmt.Errorf("unable to replace rel file '%s': %w", documentRelsFilename, err)
+		return fmt.Errorf("unable to create DOCX zip source: %w", err)
 	}
 
-	err = zipWriter.Close()
+	document, err := docx.ParseDocumentMeta(src, dt.templateFuncs)
 	if err != nil {
-		return fmt.Errorf("unable to close zip writer: %w", err)
+		return fmt.Errorf("unable to parse document metadata: %w", err)
+	}
+	document.SetRemoveEmptyTableRows(dt.removeEmptyTableRows)
+	document.SetRemoveRangeRows(dt.removeRangeRows)
+	document.SetIgnoreMissingKey(dt.ignoreMissingKey)
+
+	if err := dt.writeMediaFiles(zipWriter, document.NextImageNumber); err != nil {
+		return err
+	}
+	document.SetMediaMap(dt.media)
+
+	if err := copyNonTemplateFiles(zipWriter, src, defaultSkipFilter); err != nil {
+		return err
+	}
+	if err := dt.updateContentTypes(zipWriter, src); err != nil {
+		return err
+	}
+	if err := dt.parseDocumentRels(src); err != nil {
+		return err
 	}
 
-	// custom user post processing
+	chartRelToTargetXlsx, err := buildChartXlsxMap(src)
+	if err != nil {
+		return err
+	}
+
+	if err := dt.processXlsxFiles(zipWriter, src, templateValues); err != nil {
+		return err
+	}
+
+	var warnDataMap map[string]any
+	if dt.warnOnMissingKey {
+		warnDataMap = toStringMap(templateValues)
+	}
+
+	if err := dt.processHeadersFootersDocument(zipWriter, src, document.ApplyTemplate, templateValues, warnDataMap); err != nil {
+		return err
+	}
+	if err := dt.processChartFiles(zipWriter, src, chartRelToTargetXlsx, templateValues, warnDataMap); err != nil {
+		return err
+	}
+	if err := dt.updateDocumentRels(zipWriter, src); err != nil {
+		return err
+	}
+
+	return zipWriter.Close()
+}
+
+// Apply applies the template with the provided values to the DOCX file.
+func (dt *docxTemplate) Apply(templateValues any) error {
+	templateValues = dt.normalizeTemplateValues(templateValues)
+
+	if len(dt.filesPreProcessors) > 0 {
+		if err := xml.ProcessedOutput(dt.filesPreProcessors, &dt.input, "pre"); err != nil {
+			return fmt.Errorf("unable to pre-process output DOCX file: %w", err)
+		}
+	}
+
+	if err := dt.applyTemplatePipeline(templateValues); err != nil {
+		return err
+	}
+
 	if len(dt.filesPostProcessors) > 0 {
-		err := xml.ProcessedOutput(dt.filesPostProcessors, &dt.output, "post")
-		if err != nil {
+		if err := xml.ProcessedOutput(dt.filesPostProcessors, &dt.output, "post"); err != nil {
 			return fmt.Errorf("unable to post-process output DOCX file: %w", err)
 		}
 	}
 
+	return nil
+}
+
+// writeMediaFiles writes media files into the ZIP and assigns Word-compatible filenames.
+func (dt *docxTemplate) writeMediaFiles(zipWriter *zip.Writer, nextImageNumber func() uint64) error {
+	for filename, media := range dt.media {
+		imageN := nextImageNumber()
+		wordFilename := fmt.Sprintf("image%d%s", imageN, path.Ext(filename))
+		dt.media[filename].WordFilename = wordFilename
+
+		filepath := path.Join("word/media", media.WordFilename)
+		fw, err := zipWriter.Create(filepath)
+		if err != nil {
+			return fmt.Errorf("unable to create media file '%s': %w", filepath, err)
+		}
+		if _, err := fw.Write(media.Data); err != nil {
+			return fmt.Errorf("unable to write media file '%s': %w", filepath, err)
+		}
+	}
 	return nil
 }
 
@@ -601,16 +632,13 @@ func (dt *docxTemplate) Save(filename string) error {
 	return os.WriteFile(filename, dt.output.Bytes(), 0644)
 }
 
-// Bytes returns the output bytes of the output xlsx file bytes
-// (empty if Apply was not used).
+// Bytes returns the output bytes of the output xlsx file bytes.
 func (dt *docxTemplate) Bytes() []byte {
 	return dt.output.Bytes()
 }
 
 type TemplateOption func(*docxTemplate)
 
-// WithFilename задаёт имя файла для вывода в предупреждениях о пропущенных ключах.
-// Полезно при использовании NewDocxTemplateFromBytes, когда имя файла неизвестно автоматически.
 func WithFilename(name string) TemplateOption {
 	return func(t *docxTemplate) {
 		t.filename = name
@@ -623,10 +651,7 @@ func NoRemoveEmptyTableRows() TemplateOption {
 	}
 }
 
-// RemoveRangeRows удаляет строки таблицы, которые содержали директивы
-// {{range}} или {{end}} и после выполнения шаблона оказались пустыми.
-// Обычные пустые строки, не связанные с range, остаются нетронутыми.
-// Совместима с NoRemoveEmptyTableRows — обе опции можно использовать вместе.
+// RemoveRangeRows removes range directive rows after template rendering.
 func RemoveRangeRows() TemplateOption {
 	return func(t *docxTemplate) {
 		t.removeRangeRows = true
@@ -639,9 +664,7 @@ func IgnoreMissingKey() TemplateOption {
 	}
 }
 
-// WarnOnMissingKey включает вывод предупреждений в stderr для каждого
-// плейсхолдера, которого нет в переданных данных. Автоматически включает
-// IgnoreMissingKey — иначе шаблон вернёт ошибку раньше, чем дойдёт до лога.
+// WarnOnMissingKey enables warnings for missing keys in stderr.
 func WarnOnMissingKey() TemplateOption {
 	return func(t *docxTemplate) {
 		t.ignoreMissingKey = true
@@ -649,8 +672,7 @@ func WarnOnMissingKey() TemplateOption {
 	}
 }
 
-// SetMissingKeyLogger позволяет задать свой *slog.Logger вместо стандартного stderr.
-// Пример: gotemplatedocx.SetMissingKeyLogger(slog.Default())
+// SetMissingKeyLogger allows setting a custom *slog.Logger.
 func SetMissingKeyLogger(logger *slog.Logger) TemplateOption {
 	return func(t *docxTemplate) {
 		t.missingKeyLogger = logger

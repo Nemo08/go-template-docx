@@ -48,10 +48,8 @@ func (r *Relationship) ToXml() ([]byte, error) {
 		return []byte{}, err
 	}
 
-	header := []byte(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>`)
-	xmlBytes := make([]byte, 0, len(header)+len(output))
-
-	xmlBytes = append(xmlBytes, header...)
+	xmlBytes := make([]byte, 0, len(xmlStdHeader)+len(output))
+	xmlBytes = append(xmlBytes, xmlStdHeader...)
 	xmlBytes = append(xmlBytes, output...)
 
 	return xmlBytes, nil

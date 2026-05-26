@@ -27,7 +27,11 @@ type R struct {
 	T string `xml:"t"`
 }
 
-var sharedStringsTagsRE = regexp.MustCompile(`<si(?:\s[^>]*)?><t(?:\s[^>]*)?>(.*?)</t></si>`)
+var (
+	sharedStringsTagsRE = regexp.MustCompile(`<si(?:\s[^>]*)?><t(?:\s[^>]*)?>(.*?)</t></si>`)
+	reCountAttr         = regexp.MustCompile(`count="(\d+)"`)
+	reUniqueCountAttr   = regexp.MustCompile(`uniqueCount="(\d+)"`)
+)
 
 // TODO: switch to xml parsing
 func GetReferencedSharedStringsByIndexAndCleanup(fileContent []byte) ([]byte, map[int]string, map[int]int, error) {
@@ -85,14 +89,11 @@ func UpdateSharedStringsCounts(sharedStringsContent []byte, count uint) ([]byte,
 		return nil, fmt.Errorf("error counting unique shared strings in sharedStrings.xml: %w", err)
 	}
 
-	countAttrRE := regexp.MustCompile(`count="(\d+)"`)
-	uniqueCountAttrRE := regexp.MustCompile(`uniqueCount="(\d+)"`)
-
-	sharedStringsContent = countAttrRE.ReplaceAllFunc(sharedStringsContent, func(match []byte) []byte {
+	sharedStringsContent = reCountAttr.ReplaceAllFunc(sharedStringsContent, func(match []byte) []byte {
 		return []byte(fmt.Sprintf(`count="%d"`, count))
 	})
 
-	sharedStringsContent = uniqueCountAttrRE.ReplaceAllFunc(sharedStringsContent, func(match []byte) []byte {
+	sharedStringsContent = reUniqueCountAttr.ReplaceAllFunc(sharedStringsContent, func(match []byte) []byte {
 		return []byte(fmt.Sprintf(`uniqueCount="%d"`, uniqueCount))
 	})
 

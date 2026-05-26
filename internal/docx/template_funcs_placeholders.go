@@ -247,17 +247,23 @@ func (d *documentMeta) applyShapesBgFillColor(srcXML string) string {
 
 			// update VML gradient fill, keep gradient and recolor stops
 			block = vFillRe.ReplaceAllStringFunc(block, func(tag string) string {
-				getShapeAttr := func(name string) string {
-					re := regexp.MustCompile(`(?i)\b` + name + `="([^"]*)"`)
-					m := re.FindStringSubmatch(tag)
-					if len(m) == 2 {
-						return m[1]
+				// Fast extraction of VML attributes — avoids regex compilation per call
+				extractAttr := func(name string) string {
+					marker := name + `="`
+					idx := strings.Index(tag, marker)
+					if idx < 0 {
+						return ""
 					}
-					return ""
+					start := idx + len(marker)
+					end := strings.IndexByte(tag[start:], '"')
+					if end < 0 {
+						return ""
+					}
+					return tag[start : start+end]
 				}
-				rotate := getShapeAttr("rotate")
-				angle := getShapeAttr("angle")
-				focus := getShapeAttr("focus")
+				rotate := extractAttr("rotate")
+				angle := extractAttr("angle")
+				focus := extractAttr("focus")
 
 				base := strings.ToLower(strings.TrimPrefix(hex, "#"))
 				darker := adjustBrightnessHex(base, 0.25, false)

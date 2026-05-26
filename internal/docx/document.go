@@ -1,20 +1,26 @@
 package docx
 
 import (
-	"archive/zip"
-	"bytes"
 	"encoding/xml"
 	"fmt"
 	"path"
-	"reflect"
 	"regexp"
 	"strconv"
 	"strings"
 	"text/template"
-	"text/template/parse"
 
-	goziputils "github.com/JJJJJJack/go-zip-utils"
+	"github.com/JJJJJJack/go-template-docx/internal/zio"
 )
+
+// DocumentProcessor defines the interface for applying templates to DOCX parts.
+type DocumentProcessor interface {
+	ApplyTemplate(name string, content []byte, data any) (output []byte, media []MediaRel, err error)
+	NextImageNumber() uint64
+	SetMediaMap(mm MediaMap)
+	SetRemoveEmptyTableRows(v bool)
+	SetRemoveRangeRows(v bool)
+	SetIgnoreMissingKey(v bool)
+}
 
 type documentMeta struct {
 	docPrIdsBijectiveIndex uint32
@@ -100,6 +106,12 @@ func (d *documentMeta) SetMediaMap(mm MediaMap) {
 	d.mediaMap = mm
 }
 
+func (d *documentMeta) SetRemoveEmptyTableRows(v bool) { d.RemoveEmptyTableRows = v }
+
+func (d *documentMeta) SetRemoveRangeRows(v bool) { d.RemoveRangeRows = v }
+
+func (d *documentMeta) SetIgnoreMissingKey(v bool) { d.IgnoreMissingKey = v }
+
 type sectPr struct {
 	PgSz struct {
 		W int `xml:"w,attr"`
@@ -133,124 +145,26 @@ func parseDocumentSettings(docXML []byte) (usableWidthInches, usableHeightInches
 	return usableWidthInches, usableHeightInches, nil
 }
 
-// wrapMissingKeys конвертирует данные в map[string]any и заменяет nil → "".
-// tmpl используется чтобы найти все переменные шаблона и добавить
-// отсутствующие ключи со значением "" — иначе missingkey=zero вернёт
-// нулевой interface{} который рендерится как "<no value>" и ломает XML.
-func wrapMissingKeys(data any, tmpl *template.Template) map[string]any {
-	var m map[string]any
-
-	switch v := data.(type) {
-	case map[string]any:
-		m = make(map[string]any, len(v))
-		for k, val := range v {
-			if val == nil {
-				m[k] = ""
-			} else {
-				m[k] = val
-			}
-		}
-	case map[string]string:
-		m = make(map[string]any, len(v))
-		for k, val := range v {
-			m[k] = val
-		}
-	default:
-		return nil
-	}
-
-	// Добавляем все переменные шаблона со значением "" если их нет в данных.
-	// Это единственный способ избежать "<no value>" при missingkey=zero.
-	if tmpl != nil {
-		for _, t := range tmpl.Templates() {
-			if t.Tree == nil || t.Tree.Root == nil {
-				continue
-			}
-			for varName := range extractFieldNames(t.Tree.Root) {
-				if _, exists := m[varName]; !exists {
-					m[varName] = ""
-				}
-			}
-		}
-	}
-
-	return m
-}
-
-// extractFieldNames обходит дерево шаблона и возвращает имена полей верхнего
-// уровня (например ".Name" → "Name"). Нужно чтобы заполнить отсутствующие ключи.
-func extractFieldNames(node parse.Node) map[string]struct{} {
-	result := map[string]struct{}{}
-	extractFieldNamesRec(node, result)
-	return result
-}
-
-func extractFieldNamesRec(node parse.Node, out map[string]struct{}) {
-	if node == nil {
-		return
-	}
-	// Go-ловушка: интерфейс может содержать тип, но nil-указатель -
-	// тогда node == nil не срабатывает, но обращение к полям вызывает панику.
-	if v := reflect.ValueOf(node); v.Kind() == reflect.Ptr && v.IsNil() {
-		return
-	}
-	switch n := node.(type) {
-	case *parse.ListNode:
-		for _, elem := range n.Nodes {
-			extractFieldNamesRec(elem, out)
-		}
-	case *parse.ActionNode:
-		extractFieldNamesRec(n.Pipe, out)
-	case *parse.IfNode:
-		extractFieldNamesRec(n.Pipe, out)
-		extractFieldNamesRec(n.List, out)
-		extractFieldNamesRec(n.ElseList, out)
-	case *parse.RangeNode:
-		extractFieldNamesRec(n.Pipe, out)
-		extractFieldNamesRec(n.List, out)
-		extractFieldNamesRec(n.ElseList, out)
-	case *parse.WithNode:
-		extractFieldNamesRec(n.Pipe, out)
-		extractFieldNamesRec(n.List, out)
-		extractFieldNamesRec(n.ElseList, out)
-	case *parse.PipeNode:
-		for _, cmd := range n.Cmds {
-			extractFieldNamesRec(cmd, out)
-		}
-	case *parse.CommandNode:
-		for _, arg := range n.Args {
-			extractFieldNamesRec(arg, out)
-		}
-	case *parse.FieldNode:
-		// .Name или .Name.Sub — берём только первый уровень
-		if len(n.Ident) > 0 {
-			out[n.Ident[0]] = struct{}{}
-		}
-	}
-}
-
 var (
 	reDocPr        = regexp.MustCompile(`<wp:docPr\s+id="(\d+)"\s+name="Picture\s+(\d+)"\s*/>`)
 	reRId          = regexp.MustCompile(`"rId(\d+)"`)
-	reImagePrefix  = regexp.MustCompile(`^word/media/image`)
+	reImagePrefix  = regexp.MustCompile(`^` + ImagePrefix)
 )
 
 // TODO: use xml parsing instead of regex
-func ParseDocumentMeta(zm goziputils.ZipMap, tf template.FuncMap) (*documentMeta, error) {
+func ParseDocumentMeta(source zio.FileSource, tf template.FuncMap) (DocumentProcessor, error) {
 	d := documentMeta{
 		templateFuncs: tf,
 	}
 
 	// work on word/document.xml
 
-	documentFile := zm["word/document.xml"]
-	if documentFile == nil {
-		return nil, fmt.Errorf("word/document.xml not found in docx")
-	}
-
-	documentContent, err := goziputils.ReadZipFileContent(documentFile)
+	documentContent, found, err := source.ReadFile(DocumentXMLPath)
 	if err != nil {
 		return nil, fmt.Errorf("error reading zip file content: %w", err)
+	}
+	if !found {
+		return nil, fmt.Errorf("%s not found in docx", DocumentXMLPath)
 	}
 
 	d.maxWidthInches, d.maxHeightInches, err = parseDocumentSettings(documentContent)
@@ -280,14 +194,12 @@ func ParseDocumentMeta(zm goziputils.ZipMap, tf template.FuncMap) (*documentMeta
 
 	// work on word/_rels/document.xml.rels
 
-	wordDocumentRelsFile := zm["word/_rels/document.xml.rels"]
-	if wordDocumentRelsFile == nil {
-		return nil, fmt.Errorf("word/_rels/document.xml.rels not found in zip")
-	}
-
-	wordDocumentRelsContent, err := goziputils.ReadZipFileContent(wordDocumentRelsFile)
+	wordDocumentRelsContent, found, err := source.ReadFile(DocumentRelsPath)
 	if err != nil {
 		return nil, fmt.Errorf("could not read zip file content: %w", err)
+	}
+	if !found {
+		return nil, fmt.Errorf("%s not found in zip", DocumentRelsPath)
 	}
 
 	rIdMatches := reRId.FindAllStringSubmatch(string(wordDocumentRelsContent), -1)
@@ -303,95 +215,29 @@ func ParseDocumentMeta(zm goziputils.ZipMap, tf template.FuncMap) (*documentMeta
 	}
 
 	// work on word/media/images
-	for filename := range zm {
+	err = source.Each(func(filename string) error {
 		if !reImagePrefix.MatchString(filename) {
-			continue
+			return nil
 		}
 
-		imageNumberStr := strings.TrimPrefix(filename, "word/media/image")
+		imageNumberStr := strings.TrimPrefix(filename, ImagePrefix)
 		imageNumberStr = strings.TrimSuffix(imageNumberStr, path.Ext(filename))
 
 		imageNumber, err := strconv.ParseUint(imageNumberStr, 10, 64)
 		if err != nil {
-			return nil, fmt.Errorf("could not parse image number from filename '%s': %w", filename, err)
+			return fmt.Errorf("could not parse image number from filename '%s': %w", filename, err)
 		}
 
 		if imageNumber > d.greaterImageNumber {
 			d.greaterImageNumber = imageNumber
 		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
 
 	return &d, nil
 }
 
-func (d *documentMeta) ApplyTemplate(f *zip.File, zipWriter *zip.Writer, data any) ([]MediaRel, error) {
-	documentXml, err := goziputils.ReadZipFileContent(f)
-	if err != nil {
-		return nil, fmt.Errorf("unable to read document file '%s': %w", f.Name, err)
-	}
 
-	documentXml = []byte(PatchXml(string(documentXml)))
-	// Маркируем строки с директивами ПОСЛЕ PatchXml — только тогда {{ }}
-	// гарантированно не разбиты по нескольким XML-тегам.
-	if d.RemoveRangeRows {
-		documentXml = []byte(markRangeDirectiveRows(string(documentXml)))
-	}
-
-	tplOption := "missingkey=error"
-	if d.IgnoreMissingKey {
-		tplOption = "missingkey=zero"
-	}
-
-	tmpl, err := template.New(f.Name).
-		Option(tplOption).
-		Funcs(d.templateFuncs).
-		Parse(string(documentXml))
-
-	if err != nil {
-		return nil, fmt.Errorf("unable to parse template in file '%s': %w", f.Name, err)
-	}
-
-	// Заполняем отсутствующие ключи после парсинга — теперь знаем все переменные шаблона.
-	if d.IgnoreMissingKey {
-		if wrapped := wrapMissingKeys(data, tmpl); wrapped != nil {
-			data = wrapped
-		}
-	}
-
-	appliedTemplate := bytes.Buffer{}
-	err = tmpl.Execute(&appliedTemplate, data)
-	if err != nil {
-		return nil, fmt.Errorf("unable to execute template in file '%s': %w", f.Name, err)
-	}
-
-	output, media, err := d.applyImages(appliedTemplate.String())
-	if err != nil {
-		return nil, fmt.Errorf("unable to apply images in file '%s': %w", f.Name, err)
-	}
-
-	output, replaceMedia := d.replaceImages(output)
-
-	media = append(media, replaceMedia...)
-
-	output = d.applyShapesBgFillColor(output)
-
-	output = d.replaceTableCellBgColors(output)
-
-	output = flattenNestedTextRuns(output)
-
-	output = ensureXmlSpacePreserve(output)
-
-	if d.RemoveEmptyTableRows {
-		output = removeEmptyTableRows(output)
-	}
-	if d.RemoveRangeRows {
-		output = removeMarkedEmptyRows(output)
-	}
-
-	err = goziputils.RewriteFileIntoZipWriter(zipWriter, f, []byte(output))
-	if err != nil {
-		return nil, fmt.Errorf("unable to rewrite file '%s' in zip: %w", f.Name, err)
-	}
-
-	return media, nil
-}

@@ -4,6 +4,70 @@
 
 ⭐ Please consider supporting by starring the repo ⭐
 
+---
+
+# go-template-docx v2 (функциональные опции)
+
+Два стиля на выбор:
+
+## 1. `Render` — компактный, когда опции известны заранее
+
+```go
+result, err := gotemplatedocx.Render(docxBytes, data,
+    gotemplatedocx.WithImage("photo.png", imageBytes),
+    gotemplatedocx.WithFuncs(template.FuncMap{
+        "upper": strings.ToUpper,
+    }),
+    gotemplatedocx.WithIgnoreMissingKey(true),
+)
+os.WriteFile("output.docx", result, 0644)
+```
+
+Если опций много или они собираются динамически — через слайс:
+
+```go
+var opts []gotemplatedocx.RenderOption
+for name, data := range imageMap {
+    opts = append(opts, gotemplatedocx.WithImage(name, data))
+}
+opts = append(opts, gotemplatedocx.WithFuncs(myFuncs))
+result, err := gotemplatedocx.Render(docxBytes, data, opts...)
+```
+
+## 2. `RenderBuilder` — fluent builder, удобен для цикла
+
+```go
+b, _ := gotemplatedocx.NewRenderBuilder(docxBytes)
+
+// Добавляем картинки в цикле
+for name, data := range images {
+    b.WithImage(name, data)
+}
+
+b.WithFuncs(myFuncs).WithIgnoreMissingKey(true)
+
+result, err := b.Apply(data)
+os.WriteFile("output.docx", result, 0644)
+```
+
+Builder можно чейнить: `b.WithFuncs(...).WithIgnoreMissingKey(true).Apply(data)`.
+
+## RenderOption / Builder methods
+
+| Метод | Описание |
+|-------|----------|
+| `WithFuncs(fns)` | Добавляет кастомные template-функции |
+| `WithImage(name, data)` | Добавляет изображение (PNG/JPG) |
+| `WithPreProcessors(m ...)` | XML-предобработка перед шаблоном |
+| `WithPostProcessors(m ...)` | XML-постобработка после шаблона |
+| `WithRemoveEmptyTableRows(v)` | Удалять пустые строки таблиц (по ум. true) |
+| `WithRemoveRangeRows(v)` | Удалять строки-директивы range (по ум. false) |
+| `WithIgnoreMissingKey(v)` | Игнорировать отсутствующие ключи (по ум. false) |
+
+V1 (`NewDocxTemplateFromBytes`/`NewDocxTemplateFromFilename`) полностью совместима и остаётся без изменений.
+
+---
+
 # Notes
 
 ```diff

@@ -13,7 +13,10 @@ const (
 	ImageMediaType = iota + 1
 )
 
-const emusPerInch = 914400.0
+const (
+	emusPerInch   = 914400.0
+	defaultDPI    = 96.0
+)
 
 type Media struct {
 	Data         []byte
@@ -38,8 +41,8 @@ func (d *documentMeta) computeDocxImageSize(imageData []byte) (int, int, error) 
 		return 0, 0, fmt.Errorf("invalid image dimensions")
 	}
 
-	widthInches := float64(cfg.Width) / 96.0
-	heightInches := float64(cfg.Height) / 96.0
+	widthInches := float64(cfg.Width) / defaultDPI
+	heightInches := float64(cfg.Height) / defaultDPI
 
 	scale := math.Min(d.maxWidthInches/widthInches, d.maxHeightInches/heightInches)
 	if scale > 1 {

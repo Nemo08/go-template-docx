@@ -1,6 +1,7 @@
 package docx
 
 import (
+	"html"
 	"reflect"
 	"text/template"
 	"text/template/parse"
@@ -49,6 +50,29 @@ func wrapMissingKeys(data any, tmpl *template.Template) map[string]any {
 
 // extractFieldNames walks the template AST and returns top-level field names
 // (e.g. ".Name" -> "Name"). Used to fill in missing keys.
+// EscapeTemplateValues recursively escapes XML special characters (& < > " ')
+// in all string values within maps and slices to prevent XML parsing errors.
+func EscapeTemplateValues(data any) any {
+	switch v := data.(type) {
+	case string:
+		return html.EscapeString(v)
+	case map[string]any:
+		result := make(map[string]any, len(v))
+		for key, value := range v {
+			result[key] = EscapeTemplateValues(value)
+		}
+		return result
+	case []any:
+		result := make([]any, len(v))
+		for i, value := range v {
+			result[i] = EscapeTemplateValues(value)
+		}
+		return result
+	default:
+		return v
+	}
+}
+
 func extractFieldNames(node parse.Node) map[string]struct{} {
 	result := map[string]struct{}{}
 	extractFieldNamesRec(node, result)
@@ -59,7 +83,7 @@ func extractFieldNamesRec(node parse.Node, out map[string]struct{}) {
 	if node == nil {
 		return
 	}
-		if v := reflect.ValueOf(node); v.Kind() == reflect.Pointer && v.IsNil() {
+	if v := reflect.ValueOf(node); v.Kind() == reflect.Pointer && v.IsNil() {
 		return
 	}
 	switch n := node.(type) {

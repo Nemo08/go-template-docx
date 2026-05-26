@@ -206,6 +206,10 @@ func (dt *docxTemplate) GetTemplateVariables() (map[string]struct{}, error) {
 
 	vars := map[string]struct{}{}
 	err = src.Each(func(name string) error {
+		if strings.HasPrefix(name, "word/media/") {
+			return nil
+		}
+
 		b, found, err := src.ReadFile(name)
 		if err != nil {
 			return fmt.Errorf("unable to read file '%s': %w", name, err)
@@ -589,6 +593,7 @@ func (dt *docxTemplate) applyTemplatePipeline(templateValues any) error {
 // Apply applies the template with the provided values to the DOCX file.
 func (dt *docxTemplate) Apply(templateValues any) error {
 	templateValues = dt.normalizeTemplateValues(templateValues)
+	templateValues = docx.EscapeTemplateValues(templateValues)
 
 	if len(dt.filesPreProcessors) > 0 {
 		if err := xml.ProcessedOutput(dt.filesPreProcessors, &dt.input, "pre"); err != nil {

@@ -35,7 +35,7 @@ type documentMeta struct {
 	maxHeightInches    float64
 	templateFuncs      template.FuncMap
 	mediaMap           MediaMap
-	//Options
+	// Options
 	RemoveEmptyTableRows bool
 	RemoveRangeRows      bool
 	IgnoreMissingKey     bool

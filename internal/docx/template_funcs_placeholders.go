@@ -138,13 +138,13 @@ func adjustBrightnessHex(hex string, factor float64, lighten bool) string {
 	b, _ := strconv.ParseUint(hex[4:6], 16, 8)
 	rf, gf, bf := float64(r), float64(g), float64(b)
 	if lighten {
-		rf = rf + (255.0-rf)*factor
-		gf = gf + (255.0-gf)*factor
-		bf = bf + (255.0-bf)*factor
+		rf += (255.0 - rf) * factor
+		gf += (255.0 - gf) * factor
+		bf += (255.0 - bf) * factor
 	} else {
-		rf = rf * (1.0 - factor)
-		gf = gf * (1.0 - factor)
-		bf = bf * (1.0 - factor)
+		rf *= (1.0 - factor)
+		gf *= (1.0 - factor)
+		bf *= (1.0 - factor)
 	}
 	clamp := func(x float64) uint8 {
 		if x < 0 {

@@ -21,8 +21,7 @@ type Relationship struct {
 
 func (r *Relationship) AddMediaToRels(media []MediaRel) {
 	for _, m := range media {
-		switch m.Type {
-		case ImageMediaType:
+		if m.Type == ImageMediaType {
 			r.addRelationship(
 				imageRelationship,
 				m.Source,

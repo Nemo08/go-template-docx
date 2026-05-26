@@ -42,9 +42,9 @@ type docxTemplate struct {
 	templateFuncs       template.FuncMap
 	filesPreProcessors  []xml.HandlersMap
 	filesPostProcessors []xml.HandlersMap
-	//Options
-	removeEmptyTableRows bool //remove empty table rows in template
-	removeRangeRows      bool //remove empty rows left by {{range}}/{{end}} directives
+	// Options
+	removeEmptyTableRows bool // remove empty table rows in template
+	removeRangeRows      bool // remove empty rows left by {{range}}/{{end}} directives
 	ignoreMissingKey     bool
 	// warnOnMissingKey — если true, при обработке шаблона выводит предупреждение
 	// в консоль для каждого плейсхолдера, которого нет в переданных данных.
@@ -102,6 +102,7 @@ func NewDocxTemplateFromBytes(docxBytes []byte, options ...TemplateOption) (*doc
 
 // NewDocxTemplateFromFilename creates a new docxTemplate object from the provided DOCX filename.
 func NewDocxTemplateFromFilename(docxFilename string, options ...TemplateOption) (*docxTemplate, error) {
+	// #nosec G304 — filename comes from the caller, not from user input
 	docxBytes, err := os.ReadFile(docxFilename)
 	if err != nil {
 		return nil, fmt.Errorf("unable to read file %s: %w", docxFilename, err)
@@ -629,7 +630,7 @@ func (dt *docxTemplate) writeMediaFiles(zipWriter *zip.Writer, nextImageNumber f
 
 // Save saves the modified docx file to the specified filename.
 func (dt *docxTemplate) Save(filename string) error {
-	return os.WriteFile(filename, dt.output.Bytes(), 0644)
+	return os.WriteFile(filename, dt.output.Bytes(), 0600)
 }
 
 // Bytes returns the output bytes of the output xlsx file bytes.

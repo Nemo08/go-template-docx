@@ -10,7 +10,7 @@ import (
 )
 
 var (
-	reChartBlock = regexp.MustCompile(`(?s)<c:f>(Sheet\d+!\$([A-Z]+)\$(\d+):\$[A-Z]+\$(\d+))</c:f>.*?<c:(?:strCache|numCache)>(.*?)</c:(?:strCache|numCache)>`)
+	reChartBlock = regexp.MustCompile(`(?s)<c:f>(Sheet\d+!\$([A-Z]+)\$(\d+)(?::\$[A-Z]+\$\d+)?)</c:f>.*?<c:(?:strCache|numCache)>(.*?)</c:(?:strCache|numCache)>`)
 	reChartPt    = regexp.MustCompile(`(?s)<c:pt idx="(\d+)">.*?<c:v>(.*?)</c:v>.*?</c:pt>`)
 	reChartName  = regexp.MustCompile(`(chart\d+)\.xml`)
 )
@@ -20,13 +20,13 @@ func UpdateChart(fileContent []byte, cellAndValues map[string]string) ([]byte, e
 
 	updated := reChartBlock.ReplaceAllFunc(fileContent, func(block []byte) []byte {
 		m := reChartBlock.FindSubmatch(block)
-		if len(m) < 6 {
+		if len(m) < 5 {
 			return block
 		}
 
 		col := string(m[2])                       // "A"
 		startRow, _ := strconv.Atoi(string(m[3])) // 2
-		cache := string(m[5])                     // contents of <c:strCache> or <c:numCache>
+		cache := string(m[4])                     // contents of <c:strCache> or <c:numCache>
 
 		// Iterate over <c:pt>
 		cacheUpdated := reChartPt.ReplaceAllStringFunc(cache, func(pt string) string {

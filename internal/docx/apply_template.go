@@ -50,6 +50,7 @@ func (d *documentMeta) postProcessContent(output string) string {
 	output = d.applyShapesBgFillColor(output)
 	output = d.replaceTableCellBgColors(output)
 	output = flattenNestedTextRuns(output)
+	output = propagateRunPropsAfterBreak(output)
 	output = ensureXmlSpacePreserve(output)
 	if d.RemoveEmptyTableRows {
 		output = removeEmptyTableRows(output)

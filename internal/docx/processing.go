@@ -91,8 +91,22 @@ func removeMarkedEmptyRows(srcXML string) string {
 	})
 }
 
+// propagateRunPropsAfterBreak ensures that <w:r> elements created by breakParagraph
+// inherit the <w:rPr> from the originating run.
+func propagateRunPropsAfterBreak(srcXML string) string {
+	re := regexp.MustCompile(`(<w:rPr>[^<]*(?:<[^>]+/>[^<]*)*</w:rPr>)(<w:t[^>]*>[^<]*</w:t></w:r></w:p><w:p><w:r>)<w:t`)
+	for {
+		next := re.ReplaceAllString(srcXML, `${1}${2}${1}<w:t`)
+		if next == srcXML {
+			break
+		}
+		srcXML = next
+	}
+	return srcXML
+}
+
 // ensureXmlSpacePreserve ensures all <w:t> elements with leading/trailing
-// whitespace have the xml:space="preserve" attribute.
+// whitespace get xml:space="preserve".
 func ensureXmlSpacePreserve(srcXML string) string {
 	return reTextElement.ReplaceAllStringFunc(srcXML, func(match string) string {
 		submatches := reTextElement.FindStringSubmatch(match)

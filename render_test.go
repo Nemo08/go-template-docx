@@ -305,7 +305,7 @@ func buildMinimalDocx(t *testing.T, documentBody string) []byte {
 
 	// [Content_Types].xml
 	ct, _ := w.Create("[Content_Types].xml")
-	ct.Write([]byte(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+	_, _ = ct.Write([]byte(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
   <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
   <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
@@ -313,14 +313,14 @@ func buildMinimalDocx(t *testing.T, documentBody string) []byte {
 
 	// word/_rels/document.xml.rels
 	rels, _ := w.Create("word/_rels/document.xml.rels")
-	rels.Write([]byte(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+	_, _ = rels.Write([]byte(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
   <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
 </Relationships>`))
 
 	// word/document.xml
 	doc, _ := w.Create("word/document.xml")
-	doc.Write([]byte(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+	_, _ = doc.Write([]byte(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
   <w:body>
     <w:p>
@@ -335,6 +335,6 @@ func buildMinimalDocx(t *testing.T, documentBody string) []byte {
   </w:body>
 </w:document>`))
 
-	w.Close()
+	_ = w.Close()
 	return buf.Bytes()
 }

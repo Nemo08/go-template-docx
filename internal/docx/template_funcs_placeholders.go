@@ -164,7 +164,6 @@ var (
 	wpsSpPrRe            = regexp.MustCompile(`(?is)<wps:spPr>.*?</wps:spPr>`)
 	placeholderRe        = regexp.MustCompile(`\[\[SHAPE_BG_FILL_COLOR:#?([0-9A-Fa-f]{6})\]\]`)
 	mcAlternateContentRe = regexp.MustCompile(`(?s)<mc:AlternateContent>.*?</mc:AlternateContent>`)
-	transRe              = regexp.MustCompile(`(?is)<a:(?:lumMod|tint|satMod)[^>]*/>`)
 	aGradFillRe          = regexp.MustCompile(`(?is)<a:gradFill\b[\s\S]*?</a:gradFill>`)
 	aSchemeToSrgb        = regexp.MustCompile(`(?is)<a:schemeClr\b[^>]*>([\s\S]*?)</a:schemeClr>`)
 	aSrgbValAttrRe       = regexp.MustCompile(`(?is)(<a:srgbClr\b[^>]*\bval=")[^"]*(")`)
@@ -192,13 +191,6 @@ func (d *documentMeta) applyShapesBgFillColor(srcXML string) string {
 
 			// Work only inside <wps:spPr> to target fill and avoid touching line/effect refs
 			block = wpsSpPrRe.ReplaceAllStringFunc(block, func(sppr string) string {
-				// Capture existing transform children to preserve visual shading
-				transforms := strings.Join(transRe.FindAllString(sppr, -1), "")
-				if transforms == "" {
-					// Fallback to common Word shape shading if none detected
-					transforms = `<a:lumMod val="10000"/><a:tint val="66000"/><a:satMod val="160000"/>`
-				}
-
 				// Gradient fill: recolor stops to srgbClr=hex, keep transforms/direction
 				sppr = aGradFillRe.ReplaceAllStringFunc(sppr, func(grad string) string {
 					grad = aSchemeToSrgb.ReplaceAllString(grad, `<a:srgbClr val="`+hex+`">$1</a:srgbClr>`)

@@ -33,10 +33,10 @@ func wrapMissingKeys(data any, tmpl *template.Template) map[string]any {
 
 	if tmpl != nil {
 		for _, t := range tmpl.Templates() {
-			if t.Tree == nil || t.Tree.Root == nil {
+			if t.Tree == nil || t.Root == nil {
 				continue
 			}
-			for varName := range extractFieldNames(t.Tree.Root) {
+			for varName := range extractFieldNames(t.Root) {
 				if _, exists := m[varName]; !exists {
 					m[varName] = ""
 				}
@@ -59,7 +59,7 @@ func extractFieldNamesRec(node parse.Node, out map[string]struct{}) {
 	if node == nil {
 		return
 	}
-	if v := reflect.ValueOf(node); v.Kind() == reflect.Ptr && v.IsNil() {
+		if v := reflect.ValueOf(node); v.Kind() == reflect.Pointer && v.IsNil() {
 		return
 	}
 	switch n := node.(type) {

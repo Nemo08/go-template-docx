@@ -51,8 +51,8 @@ func collectVariables(node parse.Node, vars map[string]struct{}) {
 func ExtractAllVariables(t *template.Template) map[string]struct{} {
 	vars := make(map[string]struct{})
 	for _, tpl := range t.Templates() {
-		if tpl.Tree != nil && tpl.Tree.Root != nil {
-			collectVariables(tpl.Tree.Root, vars)
+		if tpl.Tree != nil && tpl.Root != nil {
+			collectVariables(tpl.Root, vars)
 		}
 	}
 

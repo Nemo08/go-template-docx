@@ -139,6 +139,43 @@ func TestFlattenNestedTextRuns_PreserveSpace(t *testing.T) {
 	}
 }
 
+func TestPropagateRunPropsAfterBreak_NoBreak(t *testing.T) {
+	input := `<w:r><w:rPr><w:b/></w:rPr><w:t>hello</w:t></w:r>`
+	got := propagateRunPropsAfterBreak(input)
+	if got != input {
+		t.Errorf("expected unchanged, got %q", got)
+	}
+}
+
+func TestPropagateRunPropsAfterBreak_WithBreak(t *testing.T) {
+	input := `<w:r><w:rPr><w:b/></w:rPr><w:t>a</w:t></w:r></w:p><w:p><w:r><w:t>b</w:t></w:r></w:p>`
+	got := propagateRunPropsAfterBreak(input)
+	expected := `<w:r><w:rPr><w:b/></w:rPr><w:t>a</w:t></w:r></w:p><w:p><w:r><w:rPr><w:b/></w:rPr><w:t>b</w:t></w:r></w:p>`
+	if got != expected {
+		t.Errorf("expected %q, got %q", expected, got)
+	}
+}
+
+func TestPropagateRunPropsAfterBreak_Chain(t *testing.T) {
+	input := `<w:r><w:rPr><w:b/></w:rPr><w:t>a</w:t></w:r></w:p><w:p><w:r><w:t>b</w:t></w:r></w:p><w:p><w:r><w:t>c</w:t></w:r></w:p>`
+	got := propagateRunPropsAfterBreak(input)
+	if !contains(got, `<w:rPr><w:b/></w:rPr><w:t>b`) {
+		t.Errorf("expected rPr on second paragraph, got %q", got)
+	}
+	if !contains(got, `<w:rPr><w:b/></w:rPr><w:t>c`) {
+		t.Errorf("expected rPr on third paragraph, got %q", got)
+	}
+}
+
+func TestPropagateRunPropsAfterBreak_EmptyRun(t *testing.T) {
+	input := `<w:r><w:rPr><w:b/></w:rPr><w:t></w:t></w:r></w:p><w:p><w:r><w:t>b</w:t></w:r>`
+	got := propagateRunPropsAfterBreak(input)
+	expected := `<w:r><w:rPr><w:b/></w:rPr><w:t></w:t></w:r></w:p><w:p><w:r><w:rPr><w:b/></w:rPr><w:t>b</w:t></w:r>`
+	if got != expected {
+		t.Errorf("expected %q, got %q", expected, got)
+	}
+}
+
 func TestFlattenNestedTextRuns_NoNesting(t *testing.T) {
 	input := `<w:r><w:t>hello</w:t></w:r>`
 	got := flattenNestedTextRuns(input)

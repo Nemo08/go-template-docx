@@ -18,6 +18,9 @@ var reExpandRow = regexp.MustCompile(
 
 var reAnyIndex = regexp.MustCompile(`(\.)(\d+)(\.)`)
 
+// reDocxplateVar matches docxplate-like references: {{ArrayName.Field}} or {{.ArrayName.Field}}.
+var reDocxplateVar = regexp.MustCompile(`\{\{\s*\.?(\w+)\.(\w+)\s*\}\}`)
+
 // AutoExpandRowsPreProcessor returns an xml.HandlersMap that rewrites
 // expandable table rows in word/document.xml before the Go template engine
 // runs. It needs the template data to determine actual slice lengths.
@@ -77,7 +80,7 @@ func expandRows(content string, dataMap map[string]any) (string, error) {
 func tryExpandRow(rowXML string, dataMap map[string]any) (string, error) {
 	m := reExpandRow.FindStringSubmatch(rowXML)
 	if m == nil {
-		return rowXML, nil
+		return tryExpandDocxplateRow(rowXML, dataMap)
 	}
 
 	arrayName := m[1]
@@ -88,6 +91,33 @@ func tryExpandRow(rowXML string, dataMap map[string]any) (string, error) {
 		return rowXML, nil
 	}
 
+	return expandClones(rowXML, arrayName, dataMap)
+}
+
+// tryExpandDocxplateRow checks for docxplate-like references ({{ArrayName.Field}})
+// and expands the row if the named key is a known slice in dataMap.
+func tryExpandDocxplateRow(rowXML string, dataMap map[string]any) (string, error) {
+	m := reDocxplateVar.FindStringSubmatch(rowXML)
+	if m == nil {
+		return rowXML, nil
+	}
+
+	arrayName := m[1]
+	if _, ok := sliceLen(dataMap, arrayName); !ok {
+		return rowXML, nil
+	}
+
+	normalized := normalizeDocxplateRow(rowXML, arrayName)
+	if normalized == rowXML {
+		return rowXML, nil
+	}
+
+	return expandClones(normalized, arrayName, dataMap)
+}
+
+// expandClones clones the rowXML for each element of the named slice in dataMap,
+// rewriting template block indices (.0. → .1. etc.) for each clone.
+func expandClones(rowXML string, arrayName string, dataMap map[string]any) (string, error) {
 	length, ok := sliceLen(dataMap, arrayName)
 	if !ok || length == 0 {
 		return rowXML, nil
@@ -95,7 +125,6 @@ func tryExpandRow(rowXML string, dataMap map[string]any) (string, error) {
 
 	var sb strings.Builder
 	sb.Grow(len(rowXML) * length)
-
 	sb.WriteString(rowXML)
 
 	for i := 1; i < length; i++ {
@@ -103,6 +132,20 @@ func tryExpandRow(rowXML string, dataMap map[string]any) (string, error) {
 	}
 
 	return sb.String(), nil
+}
+
+// normalizeDocxplateRow rewrites {{ArrayName.Field}} to {{.ArrayName.0.Field}}
+// within all template blocks of rowXML.
+func normalizeDocxplateRow(rowXML string, arrayName string) string {
+	quoted := regexp.QuoteMeta(arrayName)
+	re := regexp.MustCompile(`\{\{\s*\.?` + quoted + `\.(\w+)\s*\}\}`)
+	return re.ReplaceAllStringFunc(rowXML, func(match string) string {
+		sub := re.FindStringSubmatch(match)
+		if sub == nil {
+			return match
+		}
+		return fmt.Sprintf("{{.%s.0.%s}}", arrayName, sub[1])
+	})
 }
 
 func rewriteIndex(rowXML string, i int) string {

@@ -1,6 +1,7 @@
 package docx
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -58,7 +59,7 @@ func TestIsRowEmpty_WithVisual(t *testing.T) {
 func TestMarkRangeDirectiveRows_WithRange(t *testing.T) {
 	input := `<w:tr><w:tc><w:p><w:r><w:t>{{range .Items}}</w:t></w:r></w:p></w:tc></w:tr>`
 	got := markRangeDirectiveRows(input)
-	if !contains(got, rangeRowMarker) {
+	if !strings.Contains(got, rangeRowMarker) {
 		t.Errorf("expected marker in output, got %q", got)
 	}
 }
@@ -159,10 +160,10 @@ func TestPropagateRunPropsAfterBreak_WithBreak(t *testing.T) {
 func TestPropagateRunPropsAfterBreak_Chain(t *testing.T) {
 	input := `<w:r><w:rPr><w:b/></w:rPr><w:t>a</w:t></w:r></w:p><w:p><w:r><w:t>b</w:t></w:r></w:p><w:p><w:r><w:t>c</w:t></w:r></w:p>`
 	got := propagateRunPropsAfterBreak(input)
-	if !contains(got, `<w:rPr><w:b/></w:rPr><w:t>b`) {
+	if !strings.Contains(got, `<w:rPr><w:b/></w:rPr><w:t>b`) {
 		t.Errorf("expected rPr on second paragraph, got %q", got)
 	}
-	if !contains(got, `<w:rPr><w:b/></w:rPr><w:t>c`) {
+	if !strings.Contains(got, `<w:rPr><w:b/></w:rPr><w:t>c`) {
 		t.Errorf("expected rPr on third paragraph, got %q", got)
 	}
 }
@@ -184,11 +185,4 @@ func TestFlattenNestedTextRuns_NoNesting(t *testing.T) {
 	}
 }
 
-func contains(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
-}
+

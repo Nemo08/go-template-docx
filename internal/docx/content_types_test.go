@@ -1,6 +1,7 @@
 package docx
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -59,10 +60,10 @@ func TestToXML(t *testing.T) {
 		t.Fatal(err)
 	}
 	output := string(xmlBytes)
-	if !contains(output, `Extension="png"`) {
+	if !strings.Contains(output, `Extension="png"`) {
 		t.Errorf("expected Extension=\"png\" in output, got %s", output)
 	}
-	if !contains(output, `?>`) {
+	if !strings.Contains(output, `?>`) {
 		t.Errorf("expected XML header in output")
 	}
 }

@@ -96,6 +96,33 @@ const (
 	textShadingStylePrefix   = "bg:"
 )
 
+type styleEntry struct {
+	tag    string
+	dupKey string
+}
+
+var namedStyles = map[string]styleEntry{
+	"b":             {boldWTag, boldWTag},
+	"bold":          {boldWTag, boldWTag},
+	"i":             {italicWTag, italicWTag},
+	"italic":        {italicWTag, italicWTag},
+	"u":             {underlineWTag, underlineWTag},
+	"underline":     {underlineWTag, underlineWTag},
+	"s":             {strikethroughWTag, strikethroughWTag},
+	"strike":        {strikethroughWTag, strikethroughWTag},
+	"strikethrough": {strikethroughWTag, strikethroughWTag},
+}
+
+var validHighlightColor map[string]struct{}
+
+var highlightColorNames = []string{
+	"black", "blue", "cyan", "green",
+	"magenta", "red", "yellow", "white",
+	"darkBlue", "darkCyan", "darkGreen",
+	"darkMagenta", "darkRed", "darkYellow",
+	"darkGray", "lightGray", "none",
+}
+
 // list enables you to take a variadic number of arguments and
 // returns them as a slice of interface{} to another function
 // directly from the template expressions.
@@ -155,44 +182,14 @@ func formatStylesTags(stylesList []interface{}, funcName string) (string, error)
 			continue
 		}
 
-		switch styleParam {
-		case "b", "bold":
-			if strings.Contains(styles, boldWTag) {
-				return "", fmt.Errorf("%s got multiple bold styles", funcName)
-			}
-
-			styles += boldWTag
-		case "i", "italic":
-			if strings.Contains(styles, italicWTag) {
-				return "", fmt.Errorf("%s got multiple italic styles", funcName)
-			}
-
-			styles += italicWTag
-		case "u", "underline":
-			if strings.Contains(styles, underlineWTag) {
-				return "", fmt.Errorf("%s got multiple underline styles", funcName)
-			}
-
-			styles += underlineWTag
-		case "s", "strike", "strikethrough":
-			if strings.Contains(styles, strikethroughWTag) {
-				return "", fmt.Errorf("%s got multiple strikethrough styles", funcName)
-			}
-
-			styles += strikethroughWTag
-		case "black", "blue", "cyan", "green",
-			"magenta", "red", "yellow", "white",
-			"darkBlue", "darkCyan", "darkGreen",
-			"darkMagenta", "darkRed", "darkYellow",
-			"darkGray", "lightGray", "none":
-			if strings.Contains(styles, "<w:highlight w:val=") {
-				return "", fmt.Errorf("%s got multiple highlight colors styles", funcName)
-			}
-
-			styles += fmt.Sprintf(highlightWTagF, styleParam)
-		default:
+		entry, ok := namedStyles[styleParam]
+		if !ok {
 			return "", fmt.Errorf("%s got unknown style: %s", funcName, styleParam)
 		}
+		if strings.Contains(styles, entry.dupKey) {
+			return "", fmt.Errorf("%s got multiple %s styles", funcName, styleParam)
+		}
+		styles += entry.tag
 	}
 
 	return styles, nil
@@ -260,25 +257,7 @@ func color(s, hex string) (string, error) {
 
 // highlight applies a highlight color to the text
 func highlight(s, color string) (string, error) {
-	switch color {
-	case "black":
-	case "blue":
-	case "cyan":
-	case "green":
-	case "magenta":
-	case "red":
-	case "yellow":
-	case "white":
-	case "darkBlue":
-	case "darkCyan":
-	case "darkGreen":
-	case "darkMagenta":
-	case "darkRed":
-	case "darkYellow":
-	case "darkGray":
-	case "lightGray":
-	case "none":
-	default:
+	if _, ok := validHighlightColor[color]; !ok {
 		return "", fmt.Errorf("func 'highlight': invalid highlight color value: %s", color)
 	}
 
@@ -352,6 +331,15 @@ const (
 )
 
 func init() {
+	validHighlightColor = make(map[string]struct{}, len(highlightColorNames))
+	for _, c := range highlightColorNames {
+		namedStyles[c] = styleEntry{
+			tag:    fmt.Sprintf(highlightWTagF, c),
+			dupKey: "<w:highlight w:val=",
+		}
+		validHighlightColor[c] = struct{}{}
+	}
+
 	for name, fn := range extraFuncMap {
 		TemplateFuncs[name] = fn
 	}

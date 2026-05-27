@@ -1,6 +1,7 @@
 package xlsx
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -46,10 +47,10 @@ func TestUpdateSheet_NumberCells(t *testing.T) {
 		t.Fatal(err)
 	}
 	outputStr := string(output)
-	if !contains(outputStr, ">42<") {
+	if !strings.Contains(outputStr, ">42<") {
 		t.Errorf("expected number 42 in cell, got %s", outputStr)
 	}
-	if !contains(outputStr, `r="A1"`) {
+	if !strings.Contains(outputStr, `r="A1"`) {
 		t.Errorf("expected cell A1 preserved, got %s", outputStr)
 	}
 	if chartVals["A1"] != "42" {
@@ -66,16 +67,9 @@ func TestUpdateSheet_IndexReindex(t *testing.T) {
 		t.Fatal(err)
 	}
 	outputStr := string(output)
-	if !contains(outputStr, ">5<") {
+	if !strings.Contains(outputStr, ">5<") {
 		t.Errorf("expected new index 5, got %s", outputStr)
 	}
 }
 
-func contains(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
-}
+

@@ -1,6 +1,7 @@
 package docx
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -60,10 +61,10 @@ func TestApplyShapesBgFillColor_WithPlaceholder(t *testing.T) {
 	input := `<mc:AlternateContent><wps:spPr><a:solidFill><a:srgbClr val="000000"/></a:solidFill></wps:spPr>[[SHAPE_BG_FILL_COLOR:FF0000]]</mc:AlternateContent>`
 	d := &documentMeta{}
 	got := d.applyShapesBgFillColor(input)
-	if !contains(got, `val="ff0000"`) {
+	if !strings.Contains(got, `val="ff0000"`) {
 		t.Errorf("expected ff0000 fill, got %q", got)
 	}
-	if contains(got, "[[SHAPE_BG_FILL_COLOR:FF0000]]") {
+	if strings.Contains(got, "[[SHAPE_BG_FILL_COLOR:FF0000]]") {
 		t.Errorf("placeholder should be removed, got %q", got)
 	}
 }
@@ -72,7 +73,7 @@ func TestApplyShapesBgFillColor_WithHash(t *testing.T) {
 	input := `<mc:AlternateContent><wps:spPr><a:solidFill><a:srgbClr val="000000"/></a:solidFill></wps:spPr>[[SHAPE_BG_FILL_COLOR:#FF0000]]</mc:AlternateContent>`
 	d := &documentMeta{}
 	got := d.applyShapesBgFillColor(input)
-	if !contains(got, `val="ff0000"`) {
+	if !strings.Contains(got, `val="ff0000"`) {
 		t.Errorf("expected ff0000 fill, got %q", got)
 	}
 }
@@ -90,10 +91,10 @@ func TestReplaceTableCellBgColors_WithPlaceholder(t *testing.T) {
 	input := `<w:tc><w:tcPr></w:tcPr><w:p><w:r><w:t>[[TABLE_CELL_BG_COLOR:FF0000]]</w:t></w:r></w:p></w:tc>`
 	d := &documentMeta{}
 	got := d.replaceTableCellBgColors(input)
-	if !contains(got, `w:fill="FF0000"`) {
+	if !strings.Contains(got, `w:fill="FF0000"`) {
 		t.Errorf("expected FF0000 fill, got %q", got)
 	}
-	if contains(got, "[[TABLE_CELL_BG_COLOR:FF0000]]") {
+	if strings.Contains(got, "[[TABLE_CELL_BG_COLOR:FF0000]]") {
 		t.Errorf("placeholder should be removed, got %q", got)
 	}
 }
@@ -102,7 +103,7 @@ func TestReplaceTableCellBgColors_WithExistingShd(t *testing.T) {
 	input := `<w:tc><w:tcPr><w:shd w:val="clear" w:color="auto" w:fill="FFFFFF"/></w:tcPr><w:p><w:r><w:t>[[TABLE_CELL_BG_COLOR:00FF00]]</w:t></w:r></w:p></w:tc>`
 	d := &documentMeta{}
 	got := d.replaceTableCellBgColors(input)
-	if !contains(got, `w:fill="00FF00"`) {
+	if !strings.Contains(got, `w:fill="00FF00"`) {
 		t.Errorf("expected 00FF00 fill, got %q", got)
 	}
 }
@@ -111,7 +112,7 @@ func TestReplaceTableCellBgColors_WithHash(t *testing.T) {
 	input := `<w:tc><w:tcPr></w:tcPr><w:p><w:r><w:t>[[TABLE_CELL_BG_COLOR:#0000FF]]</w:t></w:r></w:p></w:tc>`
 	d := &documentMeta{}
 	got := d.replaceTableCellBgColors(input)
-	if !contains(got, `w:fill="0000FF"`) {
+	if !strings.Contains(got, `w:fill="0000FF"`) {
 		t.Errorf("expected 0000FF fill, got %q", got)
 	}
 }

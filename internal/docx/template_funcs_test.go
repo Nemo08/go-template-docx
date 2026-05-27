@@ -1,6 +1,7 @@
 package docx
 
 import (
+	"strings"
 	"testing"
 	"time"
 )
@@ -113,10 +114,10 @@ func TestInlineStyledText(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !contains(got, "<w:b />") {
+	if !strings.Contains(got, "<w:b />") {
 		t.Errorf("expected bold tag, got %q", got)
 	}
-	if !contains(got, "<w:i />") {
+	if !strings.Contains(got, "<w:i />") {
 		t.Errorf("expected italic tag, got %q", got)
 	}
 }
@@ -165,7 +166,7 @@ func TestShadeTextBg(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !contains(got, `w:fill="C0FFEE"`) {
+	if !strings.Contains(got, `w:fill="C0FFEE"`) {
 		t.Errorf("expected fill color, got %q", got)
 	}
 }
@@ -204,7 +205,7 @@ func TestFormatStylesTags_Bold(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !contains(got, "<w:b />") {
+	if !strings.Contains(got, "<w:b />") {
 		t.Errorf("expected bold tag, got %q", got)
 	}
 }
@@ -214,7 +215,7 @@ func TestFormatStylesTags_Italic(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !contains(got, "<w:i />") {
+	if !strings.Contains(got, "<w:i />") {
 		t.Errorf("expected italic tag, got %q", got)
 	}
 }
@@ -224,7 +225,7 @@ func TestFormatStylesTags_FontSize(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !contains(got, `w:val="28"`) {
+	if !strings.Contains(got, `w:val="28"`) {
 		t.Errorf("expected sz val=28, got %q", got)
 	}
 }
@@ -234,7 +235,7 @@ func TestFormatStylesTags_Color(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !contains(got, `w:val="FF0000"`) {
+	if !strings.Contains(got, `w:val="FF0000"`) {
 		t.Errorf("expected color FF0000, got %q", got)
 	}
 }
@@ -244,7 +245,7 @@ func TestFormatStylesTags_Shading(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !contains(got, `w:fill="C0FFEE"`) {
+	if !strings.Contains(got, `w:fill="C0FFEE"`) {
 		t.Errorf("expected shading C0FFEE, got %q", got)
 	}
 }
@@ -268,7 +269,7 @@ func TestFormatStylesTags_HighlightColor(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !contains(got, `w:val="yellow"`) {
+	if !strings.Contains(got, `w:val="yellow"`) {
 		t.Errorf("expected highlight yellow, got %q", got)
 	}
 }
@@ -278,7 +279,7 @@ func TestStyledText(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !contains(got, "<w:b />") || !contains(got, "text") {
+	if !strings.Contains(got, "<w:b />") || !strings.Contains(got, "text") {
 		t.Errorf("styledText() = %q, want bold text wrapper", got)
 	}
 }

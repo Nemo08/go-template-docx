@@ -4,27 +4,31 @@ import (
 	"bytes"
 	"fmt"
 	stdimage "image"
-	_ "image/jpeg"
-	_ "image/png"
+	_ "image/jpeg" // register JPEG decoder for image.Decode
+	_ "image/png"  // register PNG decoder for image.Decode
 	"math"
 )
 
+// ImageMediaType is a media type constant for images.
 const (
 	ImageMediaType = iota + 1
 )
 
 const (
-	emusPerInch   = 914400.0
-	defaultDPI    = 96.0
+	emusPerInch = 914400.0
+	defaultDPI  = 96.0
 )
 
+// Media holds binary data and the assigned Word-compatible filename for an embedded image.
 type Media struct {
 	Data         []byte
 	WordFilename string
 }
 
+// MediaMap maps original filenames to their Media entries.
 type MediaMap map[string]*Media
 
+// MediaRel describes a single media file relationship.
 type MediaRel struct {
 	Type   uint
 	RefID  string

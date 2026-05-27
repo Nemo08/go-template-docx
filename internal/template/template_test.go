@@ -1,8 +1,8 @@
 package template
 
 import (
-	"text/template"
 	"testing"
+	"text/template"
 )
 
 func TestExtractAllVariables_FieldNodes(t *testing.T) {

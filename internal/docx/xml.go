@@ -2,7 +2,7 @@ package docx
 
 import "github.com/JJJJJJack/go-template-docx/internal/xmlutil"
 
-// PatchXml removes automatically inserted content between template expressions.
-func PatchXml(srcXml string) string {
-	return xmlutil.PatchXml(srcXml)
+// PatchXML removes automatically inserted content between template expressions.
+func PatchXML(srcXML string) string {
+	return xmlutil.PatchXML(srcXML)
 }

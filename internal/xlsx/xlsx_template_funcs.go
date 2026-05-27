@@ -2,6 +2,7 @@ package xlsx
 
 import "fmt"
 
+// ToNumberCell converts a value to a number cell format if it's a numeric type.
 func ToNumberCell(v any) (interface{}, error) {
 	switch v := v.(type) {
 	case

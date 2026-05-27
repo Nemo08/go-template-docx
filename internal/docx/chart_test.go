@@ -63,11 +63,11 @@ func TestUpdateChart_NoMatch(t *testing.T) {
 	}
 }
 
-func TestApplyTemplateToXml_Basic(t *testing.T) {
+func TestApplyTemplateToXML_Basic(t *testing.T) {
 	content := `<?xml version="1.0"?><c:chart><c:v>{{.Value}}</c:v></c:chart>`
 
 	funcs := template.FuncMap{}
-	got, err := ApplyTemplateToXml("chart1.xml", []byte(content), map[string]any{"Value": "42"}, funcs, false)
+	got, err := ApplyTemplateToXML("chart1.xml", []byte(content), map[string]any{"Value": "42"}, funcs, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -76,18 +76,18 @@ func TestApplyTemplateToXml_Basic(t *testing.T) {
 	}
 }
 
-func TestApplyTemplateToXml_IgnoreMissingKey(t *testing.T) {
+func TestApplyTemplateToXML_IgnoreMissingKey(t *testing.T) {
 	content := `<?xml version="1.0"?><c:chart><c:v>{{.Missing}}</c:v></c:chart>`
 
 	funcs := template.FuncMap{}
 	// With ignoreMissingKey=false, this should error
-	_, err := ApplyTemplateToXml("chart2.xml", []byte(content), map[string]any{}, funcs, false)
+	_, err := ApplyTemplateToXML("chart2.xml", []byte(content), map[string]any{}, funcs, false)
 	if err == nil {
 		t.Error("expected error for missing key when ignoreMissingKey=false")
 	}
 
 	// With ignoreMissingKey=true, this should succeed
-	got, err := ApplyTemplateToXml("chart2.xml", []byte(content), map[string]any{}, funcs, true)
+	got, err := ApplyTemplateToXML("chart2.xml", []byte(content), map[string]any{}, funcs, true)
 	if err != nil {
 		t.Fatalf("unexpected error with ignoreMissingKey=true: %v", err)
 	}
@@ -95,5 +95,3 @@ func TestApplyTemplateToXml_IgnoreMissingKey(t *testing.T) {
 		t.Errorf("expected valid XML output, got %s", string(got))
 	}
 }
-
-

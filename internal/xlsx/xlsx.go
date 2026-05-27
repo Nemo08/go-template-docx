@@ -1,3 +1,5 @@
+// Package xlsx handles template application to embedded XLSX chart-data
+// files inside DOCX archives.
 package xlsx
 
 import (
@@ -20,7 +22,7 @@ func ApplyTemplateToCells(name string, fileContent []byte, templateValues any, i
 		Funcs(template.FuncMap{
 			"toNumberCell": ToNumberCell,
 		}).
-		Parse(xmlutil.PatchXml(string(fileContent)))
+		Parse(xmlutil.PatchXML(string(fileContent)))
 	if err != nil {
 		return nil, fmt.Errorf("unable to parse template: %w", err)
 	}

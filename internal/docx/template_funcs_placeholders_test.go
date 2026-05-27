@@ -6,9 +6,9 @@ import (
 
 func TestAdjustBrightnessHex_Lighten(t *testing.T) {
 	tests := []struct {
-		hex     string
-		factor  float64
-		want    string
+		hex    string
+		factor float64
+		want   string
 	}{
 		{"000000", 0.5, "808080"},
 		{"ffffff", 0.0, "ffffff"},
@@ -24,9 +24,9 @@ func TestAdjustBrightnessHex_Lighten(t *testing.T) {
 
 func TestAdjustBrightnessHex_Darken(t *testing.T) {
 	tests := []struct {
-		hex     string
-		factor  float64
-		want    string
+		hex    string
+		factor float64
+		want   string
 	}{
 		{"808080", 0.5, "404040"},
 		{"ffffff", 0.0, "ffffff"},

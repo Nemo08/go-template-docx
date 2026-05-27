@@ -11,7 +11,7 @@ import (
 
 var reSheetCell = regexp.MustCompile(`<c[^>]*r="([^"]+)"[^>]*t="s"[^>]*>.*?<v>(\d+)</v>.*?</c>`)
 
-// TODO: switch to xml parsing
+// UpdateSheet processes cell references in a sheet XML, replacing shared string indices and converting number cells.
 func UpdateSheet(fileContent []byte, numberCellsValues map[int]string, sharedStringsNewIndexes map[int]int) ([]byte, map[string]string, error) {
 	// Capture cell reference and shared string index
 	matches := reSheetCell.FindAllStringSubmatch(string(fileContent), -1)
@@ -70,8 +70,8 @@ type Worksheet struct {
 	Rows []Row `xml:"sheetData>row"`
 }
 
-// GetCountFromXml counts <c t="s"> cells in a sheetN.xml
-func GetCountFromXml(data []byte) (uint, error) {
+// GetCountFromXML counts <c t="s"> cells in a sheetN.xml
+func GetCountFromXML(data []byte) (uint, error) {
 	decoder := xml.NewDecoder(bytes.NewReader(data))
 
 	var ws Worksheet

@@ -1,3 +1,5 @@
+// Package gotemplatedocx renders Go templates inside DOCX files, producing
+// modified DOCX output with interpolated text, images, charts, and more.
 package gotemplatedocx
 
 import (
@@ -73,7 +75,7 @@ func newDocxTemplate(inputBuffer bytes.Buffer, filename string, options ...Templ
 		xlsxChartsMeta:       make(xlsxChartsMap),
 		templateFuncs:        copyTemplateFuncs(docx.TemplateFuncs),
 		filesPreProcessors:   []xml.HandlersMap{},
-		filesPostProcessors:  []xml.HandlersMap{},
+		filesPostProcessors:  append([]xml.HandlersMap{}, docx.DefaultPostProcessors...),
 		removeEmptyTableRows: true,
 		ignoreMissingKey:     false,
 		warnOnMissingKey:     false,
@@ -218,7 +220,7 @@ func (dt *docxTemplate) GetTemplateVariables() (map[string]struct{}, error) {
 			return nil
 		}
 
-		tmpl, err := template.New(path.Base(name)).Funcs(dt.templateFuncs).Parse(xmlutil.PatchXml(string(b)))
+		tmpl, err := template.New(path.Base(name)).Funcs(dt.templateFuncs).Parse(xmlutil.PatchXML(string(b)))
 		if err != nil {
 			return fmt.Errorf("unable to parse template in file '%s': %w", name, err)
 		}
@@ -289,7 +291,7 @@ func matchPath(patterns ...string) fileFilter {
 	}
 }
 
-func matchRe(re... *regexp.Regexp) fileFilter {
+func matchRe(re ...*regexp.Regexp) fileFilter {
 	return func(name string) bool {
 		for _, r := range re {
 			if r.MatchString(name) {
@@ -332,7 +334,7 @@ func (dt *docxTemplate) updateContentTypes(zipWriter *zip.Writer, src zio.FileSo
 			contentTypes.AddDefaultUnique("png", "image/png")
 		}
 	}
-	updatedCt, err := contentTypes.ToXml()
+	updatedCt, err := contentTypes.ToXML()
 	if err != nil {
 		return fmt.Errorf("unable to marshal content types to XML: %w", err)
 	}
@@ -413,7 +415,7 @@ func (dt *docxTemplate) warnMissingKeysForFile(name string, src zio.FileSource, 
 	if err != nil || !found {
 		return
 	}
-	tmpl, err := template.New(path.Base(name)).Funcs(dt.templateFuncs).Parse(xmlutil.PatchXml(string(b)))
+	tmpl, err := template.New(path.Base(name)).Funcs(dt.templateFuncs).Parse(xmlutil.PatchXML(string(b)))
 	if err != nil {
 		return
 	}
@@ -492,7 +494,7 @@ func (dt *docxTemplate) processChartFiles(zipWriter *zip.Writer, src zio.FileSou
 		}
 		dt.warnMissingKeysForFile(chartN, src, warnDataMap)
 
-		fileContent, err := docx.ApplyTemplateToXml(chartN, chartContent, templateValues, dt.templateFuncs, dt.ignoreMissingKey)
+		fileContent, err := docx.ApplyTemplateToXML(chartN, chartContent, templateValues, dt.templateFuncs, dt.ignoreMissingKey)
 		if err != nil {
 			return fmt.Errorf("unable to apply template to chart file '%s': %w", chartN, err)
 		}
@@ -523,7 +525,7 @@ func (dt *docxTemplate) updateDocumentRels(zipWriter *zip.Writer, src zio.FileSo
 	}
 	if len(dt.relMedia) != 0 {
 		dt.rel.AddMediaToRels(dt.relMedia)
-		documentRelContent, err = dt.rel.ToXml()
+		documentRelContent, err = dt.rel.ToXML()
 		if err != nil {
 			return fmt.Errorf("unable to marshal rels: %w", err)
 		}
@@ -643,14 +645,17 @@ func (dt *docxTemplate) Bytes() []byte {
 	return dt.output.Bytes()
 }
 
+// TemplateOption configures a docxTemplate during construction.
 type TemplateOption func(*docxTemplate)
 
+// WithFilename sets the source filename for the template (used in logs).
 func WithFilename(name string) TemplateOption {
 	return func(t *docxTemplate) {
 		t.filename = name
 	}
 }
 
+// NoRemoveEmptyTableRows disables the default removal of empty table rows.
 func NoRemoveEmptyTableRows() TemplateOption {
 	return func(t *docxTemplate) {
 		t.removeEmptyTableRows = false
@@ -664,6 +669,7 @@ func RemoveRangeRows() TemplateOption {
 	}
 }
 
+// IgnoreMissingKey suppresses errors for template keys not present in the data.
 func IgnoreMissingKey() TemplateOption {
 	return func(t *docxTemplate) {
 		t.ignoreMissingKey = true
@@ -682,5 +688,21 @@ func WarnOnMissingKey() TemplateOption {
 func SetMissingKeyLogger(logger *slog.Logger) TemplateOption {
 	return func(t *docxTemplate) {
 		t.missingKeyLogger = logger
+	}
+}
+
+// WithAutoExpandRows enables implicit table-row expansion: a row containing
+// {{.Array.0.Field}} is automatically cloned for every element of Array.
+// Disabled by default.
+func WithAutoExpandRows(data any) RenderOption {
+	return func(t *docxTemplate) {
+		t.AddPreProcessors(docx.AutoExpandRowsPreProcessor(data))
+	}
+}
+
+// AutoExpandRows is the v1-style TemplateOption equivalent.
+func AutoExpandRows(data any) TemplateOption {
+	return func(t *docxTemplate) {
+		t.AddPreProcessors(docx.AutoExpandRowsPreProcessor(data))
 	}
 }

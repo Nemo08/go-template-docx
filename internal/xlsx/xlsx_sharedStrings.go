@@ -33,7 +33,7 @@ var (
 	reUniqueCountAttr   = regexp.MustCompile(`uniqueCount="(\d+)"`)
 )
 
-// TODO: switch to xml parsing
+// GetReferencedSharedStringsByIndexAndCleanup extracts shared strings referenced by index and cleans up the strings file.
 func GetReferencedSharedStringsByIndexAndCleanup(fileContent []byte) ([]byte, map[int]string, map[int]int, error) {
 	// decoder := xml.NewDecoder(bytes.NewReader(fileContent))
 
@@ -69,8 +69,8 @@ func GetReferencedSharedStringsByIndexAndCleanup(fileContent []byte) ([]byte, ma
 	return fileContent, numberCellsValues, stringsCellsNewIndexes, nil
 }
 
-// GetUniqueCountFromXml counts the number of <si> tags in sharedStrings.xml
-func GetUniqueCountFromXml(data []byte) (int, error) {
+// GetUniqueCountFromXML counts the number of <si> tags in sharedStrings.xml
+func GetUniqueCountFromXML(data []byte) (int, error) {
 	decoder := xml.NewDecoder(bytes.NewReader(data))
 
 	var sst SharedStrings
@@ -84,16 +84,16 @@ func GetUniqueCountFromXml(data []byte) (int, error) {
 // UpdateSharedStringsCounts updates the count and uniqueCount
 // attributes in sharedStrings.xml with previously obtained count and recalculated uniqueCount
 func UpdateSharedStringsCounts(sharedStringsContent []byte, count uint) ([]byte, error) {
-	uniqueCount, err := GetUniqueCountFromXml(sharedStringsContent)
+	uniqueCount, err := GetUniqueCountFromXML(sharedStringsContent)
 	if err != nil {
 		return nil, fmt.Errorf("error counting unique shared strings in sharedStrings.xml: %w", err)
 	}
 
-	sharedStringsContent = reCountAttr.ReplaceAllFunc(sharedStringsContent, func(match []byte) []byte {
+	sharedStringsContent = reCountAttr.ReplaceAllFunc(sharedStringsContent, func(_ []byte) []byte {
 		return []byte(fmt.Sprintf(`count="%d"`, count))
 	})
 
-	sharedStringsContent = reUniqueCountAttr.ReplaceAllFunc(sharedStringsContent, func(match []byte) []byte {
+	sharedStringsContent = reUniqueCountAttr.ReplaceAllFunc(sharedStringsContent, func(_ []byte) []byte {
 		return []byte(fmt.Sprintf(`uniqueCount="%d"`, uniqueCount))
 	})
 

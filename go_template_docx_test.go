@@ -3,8 +3,8 @@ package gotemplatedocx
 import (
 	"log/slog"
 	"os"
-	"text/template"
 	"testing"
+	"text/template"
 
 	"github.com/JJJJJJack/go-template-docx/internal/docx"
 )
@@ -241,8 +241,33 @@ func TestAddTemplateFuncs(t *testing.T) {
 
 func TestSaveAndBytes(t *testing.T) {
 	dt := &docxTemplate{}
-	// Bytes should be empty before Apply
 	if len(dt.Bytes()) != 0 {
 		t.Error("expected empty bytes before Apply")
+	}
+}
+
+func TestAutoExpandRows_OptionApplied(t *testing.T) {
+	data := map[string]any{"X": []any{1, 2}}
+	docxBytes := []byte("fake")
+	tpl, err := NewDocxTemplateFromBytes(docxBytes, AutoExpandRows(data))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(tpl.filesPreProcessors) == 0 {
+		t.Error("expected at least one pre-processor registered")
+	}
+}
+
+func TestWithAutoExpandRows_OptionApplied(t *testing.T) {
+	data := map[string]any{"X": []any{1, 2}}
+	docxBytes := []byte("fake")
+	tpl, err := NewDocxTemplateFromBytes(docxBytes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	opt := WithAutoExpandRows(data)
+	opt(tpl)
+	if len(tpl.filesPreProcessors) == 0 {
+		t.Error("expected pre-processor after WithAutoExpandRows")
 	}
 }

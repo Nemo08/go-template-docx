@@ -21,6 +21,7 @@ type contentTypes struct {
 	Overrides []tagOverride `xml:"Override"`
 }
 
+// ParseContentTypes parses the [Content_Types].xml data from a DOCX archive.
 func ParseContentTypes(data []byte) (*contentTypes, error) {
 	var ct contentTypes
 	err := xml.Unmarshal(data, &ct)
@@ -51,7 +52,7 @@ func replaceEmptyTags(data []byte) []byte {
 	return data
 }
 
-func (ct *contentTypes) ToXml() ([]byte, error) {
+func (ct *contentTypes) ToXML() ([]byte, error) {
 	output, err := xml.MarshalIndent(ct, "", "  ")
 	if err != nil {
 		return []byte{}, err

@@ -81,7 +81,7 @@ func (dt *docxTemplate) modifyXlsxInMemory(xlsxName string, xlsxData []byte, tem
 
 		dt.xlsxChartsMeta[xlsxName] = chartValues
 
-		sharedStringsRefs, err := xlsx.GetCountFromXml(sheetContent)
+		sharedStringsRefs, err := xlsx.GetCountFromXML(sheetContent)
 		if err != nil {
 			return nil, fmt.Errorf("error getting shared strings refs from sheet '%s': %w", sheetN, err)
 		}

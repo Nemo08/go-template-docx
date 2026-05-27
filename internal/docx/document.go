@@ -23,8 +23,8 @@ type DocumentProcessor interface {
 }
 
 type documentMeta struct {
-	docPrIdsBijectiveIndex uint32
-	docPrIds               []uint32
+	docPrIDsBijectiveIndex uint32
+	docPrIDs               []uint32
 	// greaterCNvPrId         uint64
 	greaterRId uint64
 	// greaterWP14DocId       uint64
@@ -41,7 +41,8 @@ type documentMeta struct {
 	IgnoreMissingKey     bool
 }
 
-const DOC_PR_ID_ROOF = 2_147_483_647 // docx id attributes are 32-bit signed integers
+// DocPrIDRoof is the maximum allowed docPr ID value.
+const DocPrIDRoof = 2_147_483_647 // docx id attributes are 32-bit signed integers
 
 // rotl32 rotates a 32-bit integer left by k bits.
 func rotl32(x uint32, k uint) uint32 {
@@ -56,35 +57,35 @@ func bijective32(x uint32) uint32 {
 	return x
 }
 
-func (d *documentMeta) RandUniqueDocPrId() (uint32, error) {
-	if d.docPrIdsBijectiveIndex == 0 {
-		d.docPrIdsBijectiveIndex = 1
+func (d *documentMeta) RandUniqueDocPrID() (uint32, error) {
+	if d.docPrIDsBijectiveIndex == 0 {
+		d.docPrIDsBijectiveIndex = 1
 	}
 
-	nextDocPrId := uint32(0)
+	nextDocPrID := uint32(0)
 findNextPrId:
 	for i := 0; ; i++ {
-		if i >= DOC_PR_ID_ROOF {
-			return 0, fmt.Errorf("this should not happen, surpassed %d attempts to create a unique id for a wp:docPr tag", DOC_PR_ID_ROOF)
+		if i >= DocPrIDRoof {
+			return 0, fmt.Errorf("this should not happen, surpassed %d attempts to create a unique id for a wp:docPr tag", DocPrIDRoof)
 		}
 
-		nextDocPrId = bijective32(d.docPrIdsBijectiveIndex) % DOC_PR_ID_ROOF
-		d.docPrIdsBijectiveIndex++
+		nextDocPrID = bijective32(d.docPrIDsBijectiveIndex) % DocPrIDRoof
+		d.docPrIDsBijectiveIndex++
 
-		for _, docPrId := range d.docPrIds {
-			if nextDocPrId == docPrId {
+		for _, docPrID := range d.docPrIDs {
+			if nextDocPrID == docPrID {
 				continue findNextPrId
 			}
 		}
 
-		if nextDocPrId != 0 {
+		if nextDocPrID != 0 {
 			break
 		}
 	}
 
-	d.docPrIds = append(d.docPrIds, nextDocPrId)
+	d.docPrIDs = append(d.docPrIDs, nextDocPrID)
 
-	return nextDocPrId, nil
+	return nextDocPrID, nil
 }
 
 func (d *documentMeta) NextPictureNumber() uint64 {
@@ -146,12 +147,12 @@ func parseDocumentSettings(docXML []byte) (usableWidthInches, usableHeightInches
 }
 
 var (
-	reDocPr        = regexp.MustCompile(`<wp:docPr\s+id="(\d+)"\s+name="Picture\s+(\d+)"\s*/>`)
-	reRId          = regexp.MustCompile(`"rId(\d+)"`)
-	reImagePrefix  = regexp.MustCompile(`^` + ImagePrefix)
+	reDocPr       = regexp.MustCompile(`<wp:docPr\s+id="(\d+)"\s+name="Picture\s+(\d+)"\s*/>`)
+	reRId         = regexp.MustCompile(`"rId(\d+)"`)
+	reImagePrefix = regexp.MustCompile(`^` + ImagePrefix)
 )
 
-// TODO: use xml parsing instead of regex
+// ParseDocumentMeta extracts document metadata and builds a DocumentProcessor from a DOCX archive.
 func ParseDocumentMeta(source zio.FileSource, tf template.FuncMap) (DocumentProcessor, error) {
 	d := documentMeta{
 		templateFuncs: tf,
@@ -173,14 +174,14 @@ func ParseDocumentMeta(source zio.FileSource, tf template.FuncMap) (DocumentProc
 	}
 
 	docPrAttrsMatches := reDocPr.FindAllStringSubmatch(string(documentContent), -1)
-	d.docPrIds = make([]uint32, 0, len(docPrAttrsMatches))
+	d.docPrIDs = make([]uint32, 0, len(docPrAttrsMatches))
 	for _, m := range docPrAttrsMatches {
-		docPrId, err := strconv.ParseUint(m[1], 10, 32)
+		docPrID, err := strconv.ParseUint(m[1], 10, 32)
 		if err != nil {
 			return nil, fmt.Errorf("could not parse DocPr ID '%s': %w", m[1], err)
 		}
 
-		d.docPrIds = append(d.docPrIds, uint32(docPrId))
+		d.docPrIDs = append(d.docPrIDs, uint32(docPrID))
 
 		pictureNumber, err := strconv.ParseUint(m[2], 10, 64)
 		if err != nil {
@@ -202,8 +203,8 @@ func ParseDocumentMeta(source zio.FileSource, tf template.FuncMap) (DocumentProc
 		return nil, fmt.Errorf("%s not found in zip", DocumentRelsPath)
 	}
 
-	rIdMatches := reRId.FindAllStringSubmatch(string(wordDocumentRelsContent), -1)
-	for _, match := range rIdMatches {
+	rIDMatches := reRId.FindAllStringSubmatch(string(wordDocumentRelsContent), -1)
+	for _, match := range rIDMatches {
 		num, err := strconv.ParseUint(match[1], 10, 64)
 		if err != nil {
 			return nil, fmt.Errorf("could not parse rId '%s': %w", match[1], err)
@@ -239,5 +240,3 @@ func ParseDocumentMeta(source zio.FileSource, tf template.FuncMap) (DocumentProc
 
 	return &d, nil
 }
-
-

@@ -15,7 +15,7 @@ var (
 	reChartName  = regexp.MustCompile(`(chart\d+)\.xml`)
 )
 
-// TODO: parse and unmarshal xml instead of using regex
+// UpdateChart updates chart XML by replacing spreadsheet cell references with their computed values.
 func UpdateChart(fileContent []byte, cellAndValues map[string]string) ([]byte, error) {
 
 	updated := reChartBlock.ReplaceAllFunc(fileContent, func(block []byte) []byte {
@@ -53,7 +53,8 @@ func UpdateChart(fileContent []byte, cellAndValues map[string]string) ([]byte, e
 	return updated, nil
 }
 
-func ApplyTemplateToXml(name string, fileContent []byte, templateValues any, templateFuncs template.FuncMap, ignoreMissingKey bool) ([]byte, error) {
+// ApplyTemplateToXML processes a chart XML file as a Go template with the given data.
+func ApplyTemplateToXML(name string, fileContent []byte, templateValues any, templateFuncs template.FuncMap, ignoreMissingKey bool) ([]byte, error) {
 	missingKeyOpt := "missingkey=error"
 	if ignoreMissingKey {
 		missingKeyOpt = "missingkey=zero"
@@ -62,7 +63,7 @@ func ApplyTemplateToXml(name string, fileContent []byte, templateValues any, tem
 	tmpl, err := template.New(name).
 		Option(missingKeyOpt).
 		Funcs(templateFuncs).
-		Parse(PatchXml(string(fileContent)))
+		Parse(PatchXML(string(fileContent)))
 	if err != nil {
 		return nil, fmt.Errorf("unable to parse template: %w", err)
 	}

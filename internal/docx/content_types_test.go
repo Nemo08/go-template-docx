@@ -48,13 +48,13 @@ func TestAddDefaultUnique_DifferentType(t *testing.T) {
 	}
 }
 
-func TestToXml(t *testing.T) {
+func TestToXML(t *testing.T) {
 	ct := &contentTypes{
 		Defaults: []tagDefault{
 			{Extension: "png", ContentType: "image/png"},
 		},
 	}
-	xmlBytes, err := ct.ToXml()
+	xmlBytes, err := ct.ToXML()
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -1,3 +1,5 @@
+// Package docx implements DOCX template processing: parsing, media
+// handling, relationship management, and template application.
 package docx
 
 import (
@@ -9,7 +11,7 @@ import (
 )
 
 func (d *documentMeta) prepareContent(content []byte) []byte {
-	content = []byte(xmlutil.PatchXml(string(content)))
+	content = []byte(xmlutil.PatchXML(string(content)))
 	if d.RemoveRangeRows {
 		content = []byte(markRangeDirectiveRows(string(content)))
 	}
@@ -51,7 +53,7 @@ func (d *documentMeta) postProcessContent(output string) string {
 	output = d.replaceTableCellBgColors(output)
 	output = flattenNestedTextRuns(output)
 	output = propagateRunPropsAfterBreak(output)
-	output = ensureXmlSpacePreserve(output)
+	output = ensureXMLSpacePreserve(output)
 	if d.RemoveEmptyTableRows {
 		output = removeEmptyTableRows(output)
 	}

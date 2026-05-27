@@ -1,3 +1,5 @@
+// Package zio provides zip-based I/O for reading, writing, and copying
+// files within DOCX archives.
 package zio
 
 import (

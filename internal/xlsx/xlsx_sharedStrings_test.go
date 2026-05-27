@@ -5,9 +5,9 @@ import (
 	"testing"
 )
 
-func TestGetUniqueCountFromXml(t *testing.T) {
+func TestGetUniqueCountFromXML(t *testing.T) {
 	data := []byte(`<?xml version="1.0"?><sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="3" uniqueCount="3"><si><t>a</t></si><si><t>b</t></si></sst>`)
-	count, err := GetUniqueCountFromXml(data)
+	count, err := GetUniqueCountFromXML(data)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -16,9 +16,9 @@ func TestGetUniqueCountFromXml(t *testing.T) {
 	}
 }
 
-func TestGetUniqueCountFromXml_Empty(t *testing.T) {
+func TestGetUniqueCountFromXML_Empty(t *testing.T) {
 	data := []byte(`<?xml version="1.0"?><sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="0" uniqueCount="0"></sst>`)
-	count, err := GetUniqueCountFromXml(data)
+	count, err := GetUniqueCountFromXML(data)
 	if err != nil {
 		t.Fatal(err)
 	}

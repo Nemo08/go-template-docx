@@ -17,8 +17,8 @@ func TestParseRelationship(t *testing.T) {
 	if len(rel.Relationships) != 1 {
 		t.Errorf("expected 1 relationship, got %d", len(rel.Relationships))
 	}
-	if rel.Relationships[0].Id != "rId1" {
-		t.Errorf("expected rId1, got %q", rel.Relationships[0].Id)
+	if rel.Relationships[0].ID != "rId1" {
+		t.Errorf("expected rId1, got %q", rel.Relationships[0].ID)
 	}
 	if rel.Relationships[0].Target != "media/image1.png" {
 		t.Errorf("expected media/image1.png, got %q", rel.Relationships[0].Target)
@@ -47,12 +47,12 @@ func TestRelationship_AddMediaToRels(t *testing.T) {
 	}
 }
 
-func TestRelationship_ToXml(t *testing.T) {
+func TestRelationship_ToXML(t *testing.T) {
 	rel := &Relationship{}
 	rel.AddMediaToRels([]MediaRel{
 		{Type: ImageMediaType, Source: "media/logo.png", RefID: "rId99"},
 	})
-	xml, err := rel.ToXml()
+	xml, err := rel.ToXML()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -68,9 +68,9 @@ func TestRelationship_ToXml(t *testing.T) {
 	}
 }
 
-func TestRelationship_ToXml_Empty(t *testing.T) {
+func TestRelationship_ToXML_Empty(t *testing.T) {
 	rel := &Relationship{}
-	xml, err := rel.ToXml()
+	xml, err := rel.ToXML()
 	if err != nil {
 		t.Fatal(err)
 	}

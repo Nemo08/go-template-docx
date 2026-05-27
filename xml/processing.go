@@ -1,3 +1,5 @@
+// Package xml provides the pre/post-processing framework for XML content
+// inside DOCX archives.
 package xml
 
 import (
@@ -17,6 +19,7 @@ type Handler func(content string) (string, error)
 // The final output will overwrite the original.
 type HandlersMap map[string][]Handler
 
+// ProcessedOutput applies pre/post-processor handlers to all files in a DOCX zip buffer.
 func ProcessedOutput(filesProcessorsMaps []HandlersMap, outputBuffer *bytes.Buffer, preOrPost string) error {
 	for _, filesPostProcessorsMap := range filesProcessorsMaps {
 		zipBytes := append([]byte(nil), outputBuffer.Bytes()...)

@@ -1,3 +1,5 @@
+// Package template provides utilities for extracting variable names from
+// parsed Go templates.
 package template
 
 import (

@@ -11,14 +11,16 @@ const (
 type relationshipDetail struct {
 	Type   string `xml:"Type,attr"`
 	Target string `xml:"Target,attr"`
-	Id     string `xml:"Id,attr"`
+	ID     string `xml:"Id,attr"`
 }
 
+// Relationship holds parsed relationships from a .rels XML file.
 type Relationship struct {
 	XMLName       xml.Name             `xml:"http://schemas.openxmlformats.org/package/2006/relationships Relationships"`
 	Relationships []relationshipDetail `xml:"Relationship"`
 }
 
+// AddMediaToRels appends media relationship entries to the relationship list.
 func (r *Relationship) AddMediaToRels(media []MediaRel) {
 	for _, m := range media {
 		if m.Type == ImageMediaType {
@@ -35,13 +37,14 @@ func (r *Relationship) addRelationship(relType, target, id string) {
 	newRel := relationshipDetail{
 		Type:   relType,
 		Target: target,
-		Id:     id,
+		ID:     id,
 	}
 
 	r.Relationships = append(r.Relationships, newRel)
 }
 
-func (r *Relationship) ToXml() ([]byte, error) {
+// ToXML serializes the relationship list back to XML bytes.
+func (r *Relationship) ToXML() ([]byte, error) {
 	output, err := xml.MarshalIndent(r, "", "  ")
 	if err != nil {
 		return []byte{}, err
@@ -54,6 +57,7 @@ func (r *Relationship) ToXml() ([]byte, error) {
 	return xmlBytes, nil
 }
 
+// ParseRelationship parses a .rels XML byte slice into a Relationship struct.
 func ParseRelationship(data []byte) (*Relationship, error) {
 	var relationships Relationship
 	err := xml.Unmarshal(data, &relationships)

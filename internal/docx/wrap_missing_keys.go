@@ -48,8 +48,6 @@ func wrapMissingKeys(data any, tmpl *template.Template) map[string]any {
 	return m
 }
 
-// extractFieldNames walks the template AST and returns top-level field names
-// (e.g. ".Name" -> "Name"). Used to fill in missing keys.
 // EscapeTemplateValues recursively escapes XML special characters (& < > " ')
 // in all string values within maps and slices to prevent XML parsing errors.
 func EscapeTemplateValues(data any) any {

@@ -1,8 +1,8 @@
 package docx
 
 import (
-	"text/template"
 	"testing"
+	"text/template"
 )
 
 func TestWrapMissingKeys_MapStringAny(t *testing.T) {
@@ -111,9 +111,9 @@ func TestEscapeTemplateValues_String(t *testing.T) {
 
 func TestEscapeTemplateValues_Map(t *testing.T) {
 	input := map[string]any{
-		"name":    "foo&bar",
-		"desc":    "<b>bold</b>",
-		"number":  42,
+		"name":   "foo&bar",
+		"desc":   "<b>bold</b>",
+		"number": 42,
 		"nested": map[string]any{
 			"inner": `a"b`,
 		},

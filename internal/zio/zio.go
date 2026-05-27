@@ -40,7 +40,7 @@ func CopyToZip(w *zip.Writer, src FileSource, name string) error {
 }
 
 // RewriteToZip replaces a file in the zip writer with new content.
-func RewriteToZip(w *zip.Writer, src FileSource, name string, content []byte) error {
+func RewriteToZip(w *zip.Writer, _ FileSource, name string, content []byte) error {
 	fw, err := w.Create(name)
 	if err != nil {
 		return fmt.Errorf("unable to create '%s' in zip: %w", name, err)

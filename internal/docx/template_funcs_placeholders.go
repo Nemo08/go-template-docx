@@ -21,15 +21,15 @@ func (d *documentMeta) applyImages(srcXML string) (string, []MediaRel, error) {
 		filename = strings.TrimSuffix(filename, "]]")
 
 		buffer := bytes.Buffer{}
-		docPrId, err := d.RandUniqueDocPrId()
+		docPrID, err := d.RandUniqueDocPrID()
 		if err != nil {
-			return srcXML, mediaRels, fmt.Errorf("unable to get unique docPrId: %w", err)
+			return srcXML, mediaRels, fmt.Errorf("unable to get unique docPrID: %w", err)
 		}
 
 		rid := d.NextRId()
-		rId := fmt.Sprintf("rId%d", rid)
+		rID := fmt.Sprintf("rID%d", rid)
 
-		imageTemplate, err := template.New("image-template").Parse(imageTemplateXml)
+		imageTemplate, err := template.New("image-template").Parse(imageTemplateXML)
 		if err != nil {
 			return srcXML, mediaRels, err
 		}
@@ -45,10 +45,10 @@ func (d *documentMeta) applyImages(srcXML string) (string, []MediaRel, error) {
 		}
 
 		pictureN := fmt.Sprintf("Picture %d", d.NextPictureNumber())
-		err = imageTemplate.Execute(&buffer, XmlImageData{
-			DocPrId: docPrId,
+		err = imageTemplate.Execute(&buffer, XMLImageData{
+			DocPrID: docPrID,
 			Name:    pictureN,
-			RefID:   rId,
+			RefID:   rID,
 			Cx:      cx,
 			Cy:      cy,
 		})
@@ -58,7 +58,7 @@ func (d *documentMeta) applyImages(srcXML string) (string, []MediaRel, error) {
 
 		mediaRels = append(mediaRels, MediaRel{
 			Type:   ImageMediaType,
-			RefID:  rId,
+			RefID:  rID,
 			Source: path.Join("media", v.WordFilename),
 		})
 
@@ -69,18 +69,18 @@ func (d *documentMeta) applyImages(srcXML string) (string, []MediaRel, error) {
 }
 
 var (
-	reDrawingBlock    = regexp.MustCompile(`(?s)<w:drawing>.*?</w:drawing>`)
-	reReplaceImage    = regexp.MustCompile(`\[\[REPLACE_IMAGE:([^\]]+)\]\]`)
-	reBlipEmbed       = regexp.MustCompile(`(<a:blip\s+r:embed=")[^"]*(")`)
-	reHexColor        = regexp.MustCompile(`\[\[TABLE_CELL_BG_COLOR:#?([0-9A-Fa-f]{6})\]\]`)
-	reShdTag          = regexp.MustCompile(`(?i)<w:shd[^>]*?/>`)
-	reFillAttr        = regexp.MustCompile(`(?i)(<w:shd[^>]*? w:fill=")[^"]*(")`)
-	reShdOpenTag      = regexp.MustCompile(`(?i)(<w:shd)`)
-	reTcBlock         = regexp.MustCompile(`(?s)<w:tc>.*?</w:tc>`)
+	reDrawingBlock = regexp.MustCompile(`(?s)<w:drawing>.*?</w:drawing>`)
+	reReplaceImage = regexp.MustCompile(`\[\[REPLACE_IMAGE:([^\]]+)\]\]`)
+	reBlipEmbed    = regexp.MustCompile(`(<a:blip\s+r:embed=")[^"]*(")`)
+	reHexColor     = regexp.MustCompile(`\[\[TABLE_CELL_BG_COLOR:#?([0-9A-Fa-f]{6})\]\]`)
+	reShdTag       = regexp.MustCompile(`(?i)<w:shd[^>]*?/>`)
+	reFillAttr     = regexp.MustCompile(`(?i)(<w:shd[^>]*? w:fill=")[^"]*(")`)
+	reShdOpenTag   = regexp.MustCompile(`(?i)(<w:shd)`)
+	reTcBlock      = regexp.MustCompile(`(?s)<w:tc>.*?</w:tc>`)
 )
 
 // replaceImages looks for [[REPLACE_IMAGE:filename.ext]] placeholders inside <w:drawing>...</w:drawing> blocks
-// remove the placeholder and replaces the image reference inside the block with the given image's rId.
+// remove the placeholder and replaces the image reference inside the block with the given image's rID.
 func (d *documentMeta) replaceImages(srcXML string) (string, []MediaRel) {
 
 	mediaRels := []MediaRel{}
@@ -96,7 +96,7 @@ func (d *documentMeta) replaceImages(srcXML string) (string, []MediaRel) {
 			block = reReplaceImage.ReplaceAllString(block, "")
 
 			rid := d.NextRId()
-			rId := fmt.Sprintf("rId%d", rid)
+			rID := fmt.Sprintf("rID%d", rid)
 
 			// Нормализуем путь перед поиском в mediaMap:
 			// replaceImage(.field) передаёт значение поля как есть (может быть UNC-путь
@@ -113,11 +113,11 @@ func (d *documentMeta) replaceImages(srcXML string) (string, []MediaRel) {
 
 			mediaRels = append(mediaRels, MediaRel{
 				Type:   ImageMediaType,
-				RefID:  rId,
+				RefID:  rID,
 				Source: path.Join("media", media.WordFilename),
 			})
 
-			block = reBlipEmbed.ReplaceAllString(block, "${1}"+rId+"${2}")
+			block = reBlipEmbed.ReplaceAllString(block, "${1}"+rID+"${2}")
 
 			return block
 		})
@@ -233,7 +233,7 @@ func (d *documentMeta) applyShapesBgFillColor(srcXML string) string {
 			// Leave <wps:style> refs unchanged; spPr fill controls the interior color
 
 			// VML fallback (<v:shape>): update fillcolor and convert gradient <v:fill/> to solid
-			block = fillColorRe.ReplaceAllStringFunc(block, func(fc string) string {
+			block = fillColorRe.ReplaceAllStringFunc(block, func(_ string) string {
 				return `fillcolor="#` + hex + `"`
 			})
 

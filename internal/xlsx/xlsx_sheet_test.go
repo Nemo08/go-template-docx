@@ -4,9 +4,9 @@ import (
 	"testing"
 )
 
-func TestGetCountFromXml(t *testing.T) {
+func TestGetCountFromXML(t *testing.T) {
 	data := []byte(`<?xml version="1.0"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData><row><c t="s"><v>0</v></c><c t="n"><v>1</v></c></row></sheetData></worksheet>`)
-	count, err := GetCountFromXml(data)
+	count, err := GetCountFromXML(data)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -15,9 +15,9 @@ func TestGetCountFromXml(t *testing.T) {
 	}
 }
 
-func TestGetCountFromXml_NoSharedStrings(t *testing.T) {
+func TestGetCountFromXML_NoSharedStrings(t *testing.T) {
 	data := []byte(`<?xml version="1.0"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData><row><c t="n"><v>1</v></c></row></sheetData></worksheet>`)
-	count, err := GetCountFromXml(data)
+	count, err := GetCountFromXML(data)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -26,9 +26,9 @@ func TestGetCountFromXml_NoSharedStrings(t *testing.T) {
 	}
 }
 
-func TestGetCountFromXml_EmptySheet(t *testing.T) {
+func TestGetCountFromXML_EmptySheet(t *testing.T) {
 	data := []byte(`<?xml version="1.0"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData></sheetData></worksheet>`)
-	count, err := GetCountFromXml(data)
+	count, err := GetCountFromXML(data)
 	if err != nil {
 		t.Fatal(err)
 	}

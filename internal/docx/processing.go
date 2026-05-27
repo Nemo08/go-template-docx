@@ -12,7 +12,7 @@ var (
 	reTableRowParts = regexp.MustCompile(`(?s)(<w:tr\b[^>]*>)(.*?)(</w:tr>)`)
 	reTextContent   = regexp.MustCompile(`(?is)<w:t\b[^>]*>(.*?)</w:t>`)
 	reVisualContent = regexp.MustCompile(`(?is)<w:drawing\b|<w:pict\b|<mc:AlternateContent\b|<v:shape\b|<wps:spPr\b`)
-	reXmlSpace      = regexp.MustCompile(`xml:space="preserve"`)
+	reXMLSpace      = regexp.MustCompile(`xml:space="preserve"`)
 	reTextElement   = regexp.MustCompile(`<w:t\b([^>]*)>([\s\S]*?)</w:t>`)
 	reNestedRun     = regexp.MustCompile(`(?is)<w:t\b([^>]*)>\s*(<w:rPr>[\s\S]*?</w:rPr>)\s*<w:t\b([^>]*)>([\s\S]*?)</w:t>\s*</w:t>`)
 	// Директивы Go-шаблона, строки с которыми должны удаляться после рендеринга.
@@ -105,9 +105,9 @@ func propagateRunPropsAfterBreak(srcXML string) string {
 	return srcXML
 }
 
-// ensureXmlSpacePreserve ensures all <w:t> elements with leading/trailing
+// ensureXMLSpacePreserve ensures all <w:t> elements with leading/trailing
 // whitespace get xml:space="preserve".
-func ensureXmlSpacePreserve(srcXML string) string {
+func ensureXMLSpacePreserve(srcXML string) string {
 	return reTextElement.ReplaceAllStringFunc(srcXML, func(match string) string {
 		submatches := reTextElement.FindStringSubmatch(match)
 		if len(submatches) < 3 {
@@ -116,7 +116,7 @@ func ensureXmlSpacePreserve(srcXML string) string {
 		attrs := submatches[1]
 		text := submatches[2]
 
-		hasAttribute := reXmlSpace.MatchString(attrs)
+		hasAttribute := reXMLSpace.MatchString(attrs)
 		needsAttribute := text != "" && text != strings.TrimSpace(text)
 
 		if hasAttribute || !needsAttribute {
@@ -140,7 +140,7 @@ func flattenNestedTextRuns(srcXML string) string {
 			innerAttrs := submatches[3]
 			text := submatches[4]
 
-			if reXmlSpace.MatchString(outerAttrs) || reXmlSpace.MatchString(innerAttrs) {
+			if reXMLSpace.MatchString(outerAttrs) || reXMLSpace.MatchString(innerAttrs) {
 				return fmt.Sprintf(`%s<w:t xml:space="preserve">%s</w:t>`, rPr, text)
 			}
 			return fmt.Sprintf(`%s<w:t>%s</w:t>`, rPr, text)

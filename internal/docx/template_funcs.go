@@ -2,32 +2,37 @@ package docx
 
 import (
 	"fmt"
+	"math"
+	"reflect"
 	"strconv"
 	"strings"
 	"text/template"
+	"time"
+	"unicode/utf8"
 )
 
-type XmlImageData struct {
-	DocPrId uint32
+// XMLImageData holds rendering parameters for an embedded image in the document.
+type XMLImageData struct {
+	DocPrID uint32
 	Name    string
 	RefID   string
 	Cx      int
 	Cy      int
 }
 
-const imageTemplateXml = `<w:drawing>
+const imageTemplateXML = `<w:drawing>
   <wp:inline distT="0" distB="0" distL="0" distR="0"
     xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"
     xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
     xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"
     xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
     <wp:extent cx="{{.Cx}}" cy="{{.Cy}}" />
-    <wp:docPr id="{{.DocPrId}}" name="{{.Name}}" />
+    <wp:docPr id="{{.DocPrID}}" name="{{.Name}}" />
     <a:graphic>
       <a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">
         <pic:pic>
           <pic:nvPicPr>
-            <pic:cNvPr id="{{.DocPrId}}" name="{{.Name}}" />
+            <pic:cNvPr id="{{.DocPrID}}" name="{{.Name}}" />
             <pic:cNvPicPr />
           </pic:nvPicPr>
           <pic:blipFill>
@@ -52,29 +57,29 @@ const imageTemplateXml = `<w:drawing>
 </w:drawing>`
 
 const (
-	DOCX_NEWLINE_INJECT        = `</w:t><w:br/><w:t>`
-	DOCX_BREAKPARAGRAPH_INJECT = `</w:t></w:r></w:p><w:p><w:r><w:t>`
+	docxNewlineInject        = `</w:t><w:br/><w:t>`
+	docxBreakParagraphInject = `</w:t></w:r></w:p><w:p><w:r><w:t>`
 
-	STYLE_WRAPPER_F     = `<w:rPr>%s</w:rPr><w:t>%s</w:t>`
-	BOLD_W_TAG          = `<w:b /><w:bCs />`
-	ITALIC_W_TAG        = `<w:i /><w:iCs />`
-	UNDERLINE_W_TAG     = `<w:u w:val="single"/>`
-	STRIKETHROUGH_W_TAG = `<w:strike />`
-	FONT_SIZE_W_TAGS_F  = `<w:sz w:val="%d" /><w:szCs w:val="%d" />`
-	COLOR_W_TAG_F       = `<w:color w:val="%s" />`
-	HIGHLIGHT_W_TAG_F   = `<w:highlight w:val="%s" />`
+	styleWrapperF     = `<w:rPr>%s</w:rPr><w:t>%s</w:t>`
+	boldWTag          = `<w:b /><w:bCs />`
+	italicWTag        = `<w:i /><w:iCs />`
+	underlineWTag     = `<w:u w:val="single"/>`
+	strikethroughWTag = `<w:strike />`
+	fontSizeWTagF     = `<w:sz w:val="%d" /><w:szCs w:val="%d" />`
+	colorWTagF        = `<w:color w:val="%s" />`
+	highlightWTagF    = `<w:highlight w:val="%s" />`
 	// HIGHLIGHT all values: https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.wordprocessing.highlightcolor?view=openxml-2.8.1
-	SHADING_W_TAG_F = `<w:shd w:val="clear" w:color="auto" w:fill="%s"/>`
+	shadingWTagF = `<w:shd w:val="clear" w:color="auto" w:fill="%s"/>`
 )
 
 var (
-	BOLD_WRAPPER_F          = fmt.Sprintf(STYLE_WRAPPER_F, BOLD_W_TAG, "%s")
-	ITALIC_WRAPPER_F        = fmt.Sprintf(STYLE_WRAPPER_F, ITALIC_W_TAG, "%s")
-	UNDERLINE_WRAPPER_F     = fmt.Sprintf(STYLE_WRAPPER_F, UNDERLINE_W_TAG, "%s")
-	STRIKETHROUGH_WRAPPER_F = fmt.Sprintf(STYLE_WRAPPER_F, STRIKETHROUGH_W_TAG, "%s")
-	COLOR_WRAPPER_F         = fmt.Sprintf(STYLE_WRAPPER_F, COLOR_W_TAG_F, "%s")
-	HIGHLIGHT_WRAPPER_F     = fmt.Sprintf(STYLE_WRAPPER_F, HIGHLIGHT_W_TAG_F, "%s")
-	SHADING_WRAPPER_F       = fmt.Sprintf(STYLE_WRAPPER_F, SHADING_W_TAG_F, "%s")
+	boldWrapperF          = fmt.Sprintf(styleWrapperF, boldWTag, "%s")
+	italicWrapperF        = fmt.Sprintf(styleWrapperF, italicWTag, "%s")
+	underlineWrapperF     = fmt.Sprintf(styleWrapperF, underlineWTag, "%s")
+	strikethroughWrapperF = fmt.Sprintf(styleWrapperF, strikethroughWTag, "%s")
+	colorWrapperF         = fmt.Sprintf(styleWrapperF, colorWTagF, "%s")
+	highlightWrapperF     = fmt.Sprintf(styleWrapperF, highlightWTagF, "%s")
+	shadingWrapperF       = fmt.Sprintf(styleWrapperF, shadingWTagF, "%s")
 )
 
 func fontSizeWrapperf(sizeHalfPoints int) string {
@@ -82,13 +87,13 @@ func fontSizeWrapperf(sizeHalfPoints int) string {
 		sizeHalfPoints = 1
 	}
 
-	return fmt.Sprintf(FONT_SIZE_W_TAGS_F, sizeHalfPoints*2, sizeHalfPoints*2)
+	return fmt.Sprintf(fontSizeWTagF, sizeHalfPoints*2, sizeHalfPoints*2)
 }
 
 const (
-	FONT_SIZE_STYLE_PREFIX       = "fontSize:"
-	FONT_SIZE_STYLE_PREFIX_SHORT = "fs:"
-	TEXT_SHADING_STYLE_PREFIX    = "bg:"
+	fontSizeStylePrefix      = "fontSize:"
+	fontSizeStylePrefixShort = "fs:"
+	textShadingStylePrefix   = "bg:"
 )
 
 // list enables you to take a variadic number of arguments and
@@ -108,13 +113,13 @@ func formatStylesTags(stylesList []interface{}, funcName string) (string, error)
 		}
 
 		// font size style
-		if strings.HasPrefix(styleParam, FONT_SIZE_STYLE_PREFIX) || strings.HasPrefix(styleParam, FONT_SIZE_STYLE_PREFIX_SHORT) {
+		if strings.HasPrefix(styleParam, fontSizeStylePrefix) || strings.HasPrefix(styleParam, fontSizeStylePrefixShort) {
 			if strings.Contains(styles, "<w:sz w:val=") {
 				return "", fmt.Errorf("%s got multiple font size styles", funcName)
 			}
 
-			sizeStr := strings.TrimPrefix(styleParam, FONT_SIZE_STYLE_PREFIX)
-			sizeStr = strings.TrimPrefix(sizeStr, FONT_SIZE_STYLE_PREFIX_SHORT)
+			sizeStr := strings.TrimPrefix(styleParam, fontSizeStylePrefix)
+			sizeStr = strings.TrimPrefix(sizeStr, fontSizeStylePrefixShort)
 
 			ptSize, err := strconv.Atoi(sizeStr)
 			if err != nil {
@@ -133,48 +138,48 @@ func formatStylesTags(stylesList []interface{}, funcName string) (string, error)
 
 			hex := strings.ToUpper(strings.TrimPrefix(styleParam, "#"))
 
-			styles += fmt.Sprintf(COLOR_W_TAG_F, hex)
+			styles += fmt.Sprintf(colorWTagF, hex)
 			continue
 		}
 
 		// shading style
-		if strings.HasPrefix(styleParam, TEXT_SHADING_STYLE_PREFIX) {
+		if strings.HasPrefix(styleParam, textShadingStylePrefix) {
 			if strings.Contains(styles, "<w:shd w:val=") {
 				return "", fmt.Errorf("%s got multiple background shading styles", funcName)
 			}
 
-			hex := strings.ToUpper(strings.TrimPrefix(styleParam, TEXT_SHADING_STYLE_PREFIX))
+			hex := strings.ToUpper(strings.TrimPrefix(styleParam, textShadingStylePrefix))
 			hex = strings.TrimPrefix(hex, "#")
 
-			styles += fmt.Sprintf(SHADING_W_TAG_F, hex)
+			styles += fmt.Sprintf(shadingWTagF, hex)
 			continue
 		}
 
 		switch styleParam {
 		case "b", "bold":
-			if strings.Contains(styles, BOLD_W_TAG) {
+			if strings.Contains(styles, boldWTag) {
 				return "", fmt.Errorf("%s got multiple bold styles", funcName)
 			}
 
-			styles += BOLD_W_TAG
+			styles += boldWTag
 		case "i", "italic":
-			if strings.Contains(styles, ITALIC_W_TAG) {
+			if strings.Contains(styles, italicWTag) {
 				return "", fmt.Errorf("%s got multiple italic styles", funcName)
 			}
 
-			styles += ITALIC_W_TAG
+			styles += italicWTag
 		case "u", "underline":
-			if strings.Contains(styles, UNDERLINE_W_TAG) {
+			if strings.Contains(styles, underlineWTag) {
 				return "", fmt.Errorf("%s got multiple underline styles", funcName)
 			}
 
-			styles += UNDERLINE_W_TAG
+			styles += underlineWTag
 		case "s", "strike", "strikethrough":
-			if strings.Contains(styles, STRIKETHROUGH_W_TAG) {
+			if strings.Contains(styles, strikethroughWTag) {
 				return "", fmt.Errorf("%s got multiple strikethrough styles", funcName)
 			}
 
-			styles += STRIKETHROUGH_W_TAG
+			styles += strikethroughWTag
 		case "black", "blue", "cyan", "green",
 			"magenta", "red", "yellow", "white",
 			"darkBlue", "darkCyan", "darkGreen",
@@ -184,7 +189,7 @@ func formatStylesTags(stylesList []interface{}, funcName string) (string, error)
 				return "", fmt.Errorf("%s got multiple highlight colors styles", funcName)
 			}
 
-			styles += fmt.Sprintf(HIGHLIGHT_W_TAG_F, styleParam)
+			styles += fmt.Sprintf(highlightWTagF, styleParam)
 		default:
 			return "", fmt.Errorf("%s got unknown style: %s", funcName, styleParam)
 		}
@@ -202,7 +207,7 @@ func styledText(text string, styles []interface{}) (string, error) {
 		return "", err
 	}
 
-	return fmt.Sprintf(STYLE_WRAPPER_F, stylesTags, text), nil
+	return fmt.Sprintf(styleWrapperF, stylesTags, text), nil
 }
 
 // inlineStyledText applies multiple styles to the given text.
@@ -215,32 +220,32 @@ func inlineStyledText(text string, styles ...interface{}) (string, error) {
 		return "", err
 	}
 
-	return fmt.Sprintf(STYLE_WRAPPER_F, stylesTags, text), nil
+	return fmt.Sprintf(styleWrapperF, stylesTags, text), nil
 }
 
 // bold makes the text bold
 func bold(s string) string {
-	return fmt.Sprintf(BOLD_WRAPPER_F, s)
+	return fmt.Sprintf(boldWrapperF, s)
 }
 
 // italic makes the text italic
 func italic(s string) string {
-	return fmt.Sprintf(ITALIC_WRAPPER_F, s)
+	return fmt.Sprintf(italicWrapperF, s)
 }
 
 // underline underlines the text
 func underline(s string) string {
-	return fmt.Sprintf(UNDERLINE_WRAPPER_F, s)
+	return fmt.Sprintf(underlineWrapperF, s)
 }
 
 // strike applies strikethrough to the text
 func strike(s string) string {
-	return fmt.Sprintf(STRIKETHROUGH_WRAPPER_F, s)
+	return fmt.Sprintf(strikethroughWrapperF, s)
 }
 
 // fontSize sets the font size of the text
 func fontSize(s string, size int) string {
-	return fmt.Sprintf(STYLE_WRAPPER_F, fontSizeWrapperf(size), s)
+	return fmt.Sprintf(styleWrapperF, fontSizeWrapperf(size), s)
 }
 
 // color sets the font color of the text
@@ -250,7 +255,7 @@ func color(s, hex string) (string, error) {
 		return "", fmt.Errorf("func 'color': invalid hex color value: %s (must be 6 characters like '0077FF')", hex)
 	}
 
-	return fmt.Sprintf(COLOR_WRAPPER_F, strings.ToUpper(hex), s), nil
+	return fmt.Sprintf(colorWrapperF, strings.ToUpper(hex), s), nil
 }
 
 // highlight applies a highlight color to the text
@@ -277,7 +282,7 @@ func highlight(s, color string) (string, error) {
 		return "", fmt.Errorf("func 'highlight': invalid highlight color value: %s", color)
 	}
 
-	return fmt.Sprintf(HIGHLIGHT_WRAPPER_F, color, s), nil
+	return fmt.Sprintf(highlightWrapperF, color, s), nil
 }
 
 // shadeTextBg applies a background color to the given text
@@ -287,7 +292,7 @@ func shadeTextBg(s, hex string) (string, error) {
 		return "", fmt.Errorf("func 'shadeTextBg': invalid hex color value: %s (must be 6 characters like '0077FF')", hex)
 	}
 
-	return fmt.Sprintf(SHADING_WRAPPER_F, strings.ToUpper(hex), s), nil
+	return fmt.Sprintf(shadingWrapperF, strings.ToUpper(hex), s), nil
 }
 
 // image wraps a placeholder around the given filename for image insertion in the document.
@@ -303,13 +308,13 @@ func replaceImage(filename string) string {
 // preserveNewline newlines are treated as `SHIFT + ENTER` input,
 // thus keeping the text in the same paragraph.
 func preserveNewline(text string) string {
-	return strings.ReplaceAll(text, "\n", DOCX_NEWLINE_INJECT)
+	return strings.ReplaceAll(text, "\n", docxNewlineInject)
 }
 
 // breakParagraph newlines are treated as `ENTER` input,
 // thus creating a new paragraph for the sequent line.
 func breakParagraph(text string) string {
-	return strings.ReplaceAll(text, "\n", DOCX_BREAKPARAGRAPH_INJECT)
+	return strings.ReplaceAll(text, "\n", docxBreakParagraphInject)
 }
 
 // shapeBgFillColor replace fillcolor to shapes
@@ -332,6 +337,283 @@ func tableCellBgColor(hex string) (string, error) {
 	return fmt.Sprintf("[[TABLE_CELL_BG_COLOR:%s]]", strings.ToUpper(hex)), nil
 }
 
+// ─── Extra template functions (registered by init) ─────────────────────────────
+
+const (
+	// HideRowSentinel is emitted by the hideRow template function; the
+	// post-processor removes any <w:tr> containing this sentinel.
+	HideRowSentinel = "\x00HIDEROW\x00"
+	// PageBreakPlaceholder is emitted by the pageBreak template function;
+	// the post-processor replaces it with the real OOXML page-break fragment.
+	PageBreakPlaceholder = "\x00PAGEBREAK\x00"
+	// PageBreakReplacement is the OOXML fragment inserted by the
+	// pageBreak post-processor.
+	PageBreakReplacement = `<w:r><w:br w:type="page"/></w:r>`
+)
+
+func init() {
+	for name, fn := range extraFuncMap {
+		TemplateFuncs[name] = fn
+	}
+}
+
+var extraFuncMap = map[string]any{
+	"formatNum":    formatNum,
+	"formatDate":   formatDate,
+	"formatDateRU": formatDateRU,
+	"hideRow":      hideRowFn,
+	"pageBreak":    pageBreakFn,
+	"default":      defaultVal,
+	"sumCol":       sumCol,
+	"avgCol":       avgCol,
+	"truncate":     truncate,
+	"romanNum":     romanNum,
+	"padRight":     padRight,
+}
+
+// formatNum formats a numeric value with thousands separator (non-breaking
+// space, U+00A0) and a configurable decimal separator.
+func formatNum(value any, decimals int, decSep string) (string, error) {
+	f, err := toFloat64(value)
+	if err != nil {
+		return "", fmt.Errorf("formatNum: %w", err)
+	}
+	negative := f < 0
+	if negative {
+		f = -f
+	}
+	pow := math.Pow(10, float64(decimals))
+	rounded := math.Round(f*pow) / pow
+	intPart := int64(rounded)
+	fracPart := rounded - float64(intPart)
+	intStr := formatThousands(intPart)
+	var result string
+	if decimals > 0 {
+		fracStr := fmt.Sprintf("%.*f", decimals, fracPart)[1:]
+		result = intStr + strings.ReplaceAll(fracStr, ".", decSep)
+	} else {
+		result = intStr
+	}
+	if negative {
+		result = "-" + result
+	}
+	return result, nil
+}
+
+func formatThousands(n int64) string {
+	if n < 0 {
+		return "-" + formatThousands(-n)
+	}
+	s := fmt.Sprintf("%d", n)
+	if len(s) <= 3 {
+		return s
+	}
+	var b strings.Builder
+	rem := len(s) % 3
+	b.WriteString(s[:rem])
+	for i := rem; i < len(s); i += 3 {
+		if i > 0 || rem > 0 {
+			b.WriteRune('\u00A0')
+		}
+		b.WriteString(s[i : i+3])
+	}
+	return b.String()
+}
+
+func toFloat64(v any) (float64, error) {
+	switch x := v.(type) {
+	case int:
+		return float64(x), nil
+	case int32:
+		return float64(x), nil
+	case int64:
+		return float64(x), nil
+	case float32:
+		return float64(x), nil
+	case float64:
+		return x, nil
+	default:
+		return 0, fmt.Errorf("unsupported type %T", v)
+	}
+}
+
+// formatDate formats a time.Time using a standard Go layout string.
+func formatDate(t time.Time, layout string) string {
+	return t.Format(layout)
+}
+
+// formatDateRU formats a time.Time replacing the English month name with
+// the Russian genitive form.
+func formatDateRU(t time.Time, layout string) string {
+	result := t.Format(layout)
+	month := t.Format("January")
+	if ru, ok := ruMonthsGenitive[month]; ok {
+		result = strings.ReplaceAll(result, month, ru)
+	}
+	return result
+}
+
+var ruMonthsGenitive = map[string]string{
+	"January": "января", "February": "февраля", "March": "марта",
+	"April": "апреля", "May": "мая", "June": "июня",
+	"July": "июля", "August": "августа", "September": "сентября",
+	"October": "октября", "November": "ноября", "December": "декабря",
+}
+
+// hideRowFn emits a sentinel when hide==true for post-processor removal.
+func hideRowFn(hide bool) string {
+	if hide {
+		return HideRowSentinel
+	}
+	return ""
+}
+
+// pageBreakFn returns a placeholder that the post-processor replaces with
+// the real OOXML page-break fragment.
+func pageBreakFn() string { return PageBreakPlaceholder }
+
+// defaultVal returns fallback when value is the zero value for its type.
+func defaultVal(value any, fallback any) any {
+	if value == nil {
+		return fallback
+	}
+	rv := reflect.ValueOf(value)
+	switch rv.Kind() {
+	case reflect.String:
+		if rv.Len() == 0 {
+			return fallback
+		}
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		if rv.Int() == 0 {
+			return fallback
+		}
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		if rv.Uint() == 0 {
+			return fallback
+		}
+	case reflect.Float32, reflect.Float64:
+		if rv.Float() == 0 {
+			return fallback
+		}
+	case reflect.Bool:
+		if !rv.Bool() {
+			return fallback
+		}
+	case reflect.Slice, reflect.Map, reflect.Pointer, reflect.Interface:
+		if rv.IsNil() {
+			return fallback
+		}
+	}
+	return value
+}
+
+// sumCol sums a named numeric field across a slice.
+func sumCol(slice any, field string) (float64, error) {
+	return aggregateCol(slice, field, false)
+}
+
+// avgCol returns the arithmetic mean of a named numeric field.
+func avgCol(slice any, field string) (float64, error) {
+	return aggregateCol(slice, field, true)
+}
+
+func aggregateCol(slice any, field string, avg bool) (float64, error) {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return 0, fmt.Errorf("sumCol/avgCol: expected slice, got %T", slice)
+	}
+	n := rv.Len()
+	if n == 0 {
+		return 0, nil
+	}
+	var sum float64
+	for i := 0; i < n; i++ {
+		elem := rv.Index(i)
+		for elem.Kind() == reflect.Pointer {
+			if elem.IsNil() {
+				continue
+			}
+			elem = elem.Elem()
+		}
+		var fval float64
+		switch elem.Kind() {
+		case reflect.Map:
+			v := elem.MapIndex(reflect.ValueOf(field))
+			if !v.IsValid() {
+				return 0, fmt.Errorf("sumCol/avgCol: field %q not found in map at index %d", field, i)
+			}
+			f, err := toFloat64(v.Interface())
+			if err != nil {
+				return 0, fmt.Errorf("sumCol/avgCol: index %d field %q: %w", i, field, err)
+			}
+			fval = f
+		case reflect.Struct:
+			f := elem.FieldByName(field)
+			if !f.IsValid() {
+				return 0, fmt.Errorf("sumCol/avgCol: field %q not found in struct at index %d", field, i)
+			}
+			v, err := toFloat64(f.Interface())
+			if err != nil {
+				return 0, fmt.Errorf("sumCol/avgCol: index %d field %q: %w", i, field, err)
+			}
+			fval = v
+		default:
+			return 0, fmt.Errorf("sumCol/avgCol: unsupported element type %s", elem.Kind())
+		}
+		sum += fval
+	}
+	if avg {
+		return sum / float64(n), nil
+	}
+	return sum, nil
+}
+
+// truncate cuts s to at most maxRunes runes, appending "…" if truncated.
+func truncate(s string, maxRunes int) string {
+	runes := []rune(s)
+	if len(runes) <= maxRunes {
+		return s
+	}
+	if maxRunes <= 0 {
+		return ""
+	}
+	return string(runes[:maxRunes-1]) + "…"
+}
+
+// romanNum converts a positive integer to an uppercase Roman numeral.
+func romanNum(n int) (string, error) {
+	if n <= 0 || n > 3999 {
+		return "", fmt.Errorf("romanNum: value %d out of range [1, 3999]", n)
+	}
+	type pair struct {
+		val int
+		sym string
+	}
+	table := []pair{
+		{1000, "M"}, {900, "CM"}, {500, "D"}, {400, "CD"},
+		{100, "C"}, {90, "XC"}, {50, "L"}, {40, "XL"},
+		{10, "X"}, {9, "IX"}, {5, "V"}, {4, "IV"}, {1, "I"},
+	}
+	var sb strings.Builder
+	for _, p := range table {
+		for n >= p.val {
+			sb.WriteString(p.sym)
+			n -= p.val
+		}
+	}
+	return sb.String(), nil
+}
+
+// padRight pads s with spaces on the right to minLen runes.
+func padRight(s string, minLen int) string {
+	n := utf8.RuneCountInString(s)
+	if n >= minLen {
+		return s
+	}
+	return s + strings.Repeat(" ", minLen-n)
+}
+
+// TemplateFuncs is the global registry of template functions available in all DOCX templates.
 var TemplateFuncs = template.FuncMap{
 	"list":             list,
 	"bold":             bold,

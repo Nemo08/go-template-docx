@@ -99,7 +99,7 @@ func TestRemoveMarkedEmptyRows_UnmarkedEmpty(t *testing.T) {
 func TestEnsureXmlSpacePreserve_AddsAttribute(t *testing.T) {
 	input := `<w:t> hello</w:t>`
 	expected := `<w:t xml:space="preserve"> hello</w:t>`
-	got := ensureXmlSpacePreserve(input)
+	got := ensureXMLSpacePreserve(input)
 	if got != expected {
 		t.Errorf("expected %q, got %q", expected, got)
 	}
@@ -107,7 +107,7 @@ func TestEnsureXmlSpacePreserve_AddsAttribute(t *testing.T) {
 
 func TestEnsureXmlSpacePreserve_AlreadyHasAttribute(t *testing.T) {
 	input := `<w:t xml:space="preserve"> hello</w:t>`
-	got := ensureXmlSpacePreserve(input)
+	got := ensureXMLSpacePreserve(input)
 	if got != input {
 		t.Errorf("expected unchanged, got %q", got)
 	}
@@ -115,7 +115,7 @@ func TestEnsureXmlSpacePreserve_AlreadyHasAttribute(t *testing.T) {
 
 func TestEnsureXmlSpacePreserve_NoWhitespace(t *testing.T) {
 	input := `<w:t>hello</w:t>`
-	got := ensureXmlSpacePreserve(input)
+	got := ensureXMLSpacePreserve(input)
 	if got != input {
 		t.Errorf("expected unchanged, got %q", got)
 	}

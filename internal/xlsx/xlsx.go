@@ -11,9 +11,9 @@ import (
 )
 
 // ApplyTemplateToCells applies the templateValues to the given file content and returns the modified content.
-func ApplyTemplateToCells(name string, fileContent []byte, templateValues any, ignoreMissingKey bool) ([]byte, error) {
+func ApplyTemplateToCells(name string, fileContent []byte, templateValues any, ignoreMissingKey, deleteMissingKey bool) ([]byte, error) {
 	opt := "missingkey=error"
-	if ignoreMissingKey {
+	if deleteMissingKey {
 		opt = "missingkey=zero"
 	}
 
@@ -29,6 +29,9 @@ func ApplyTemplateToCells(name string, fileContent []byte, templateValues any, i
 
 	var buf bytes.Buffer
 	if err := tmpl.Execute(&buf, templateValues); err != nil {
+		if ignoreMissingKey {
+			return fileContent, nil
+		}
 		return nil, fmt.Errorf("unable to execute template: %w", err)
 	}
 

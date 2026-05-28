@@ -52,9 +52,21 @@ func WithRemoveRangeRows(v bool) RenderOption {
 }
 
 // WithIgnoreMissingKey enables or disables missing key ignoring (default: false).
+// When enabled, template execution errors for missing keys are suppressed and
+// the original template placeholder (e.g. {{.MissingKey}}) is left in the
+// output for a later template pass.
 func WithIgnoreMissingKey(v bool) RenderOption {
 	return func(t *docxTemplate) {
 		t.ignoreMissingKey = v
+	}
+}
+
+// WithDeleteMissingKey replaces missing template keys with empty strings
+// instead of erroring. Unlike IgnoreMissingKey, the resulting output is
+// clean — no template placeholders remain.
+func WithDeleteMissingKey() RenderOption {
+	return func(t *docxTemplate) {
+		t.deleteMissingKey = true
 	}
 }
 
@@ -139,6 +151,12 @@ func (b *RenderBuilder) WithRemoveRangeRows(v bool) *RenderBuilder {
 // WithIgnoreMissingKey enables or disables missing key ignoring.
 func (b *RenderBuilder) WithIgnoreMissingKey(v bool) *RenderBuilder {
 	b.tpl.ignoreMissingKey = v
+	return b
+}
+
+// WithDeleteMissingKey replaces missing template keys with empty strings.
+func (b *RenderBuilder) WithDeleteMissingKey() *RenderBuilder {
+	b.tpl.deleteMissingKey = true
 	return b
 }
 

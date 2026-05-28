@@ -20,7 +20,7 @@ func (d *documentMeta) prepareContent(content []byte) []byte {
 
 func (d *documentMeta) parseTemplate(name string, content string) (*template.Template, error) {
 	tplOption := "missingkey=error"
-	if d.IgnoreMissingKey {
+	if d.DeleteMissingKey {
 		tplOption = "missingkey=zero"
 	}
 
@@ -31,7 +31,7 @@ func (d *documentMeta) parseTemplate(name string, content string) (*template.Tem
 }
 
 func (d *documentMeta) wrapData(data any, tmpl *template.Template) any {
-	if !d.IgnoreMissingKey {
+	if !d.DeleteMissingKey {
 		return data
 	}
 	if wrapped := wrapMissingKeys(data, tmpl); wrapped != nil {
@@ -75,6 +75,11 @@ func (d *documentMeta) ApplyTemplate(name string, content []byte, data any) ([]b
 
 	output, err := d.executeTemplate(tmpl, name, data)
 	if err != nil {
+		if d.IgnoreMissingKey {
+			// Return the prepared (patched) content as-is so template
+			// placeholders like {{.MissingKey}} remain for a later pass.
+			return content, nil, nil
+		}
 		return nil, nil, err
 	}
 

@@ -54,9 +54,9 @@ func UpdateChart(fileContent []byte, cellAndValues map[string]string) ([]byte, e
 }
 
 // ApplyTemplateToXML processes a chart XML file as a Go template with the given data.
-func ApplyTemplateToXML(name string, fileContent []byte, templateValues any, templateFuncs template.FuncMap, ignoreMissingKey bool) ([]byte, error) {
+func ApplyTemplateToXML(name string, fileContent []byte, templateValues any, templateFuncs template.FuncMap, ignoreMissingKey, deleteMissingKey bool) ([]byte, error) {
 	missingKeyOpt := "missingkey=error"
-	if ignoreMissingKey {
+	if deleteMissingKey {
 		missingKeyOpt = "missingkey=zero"
 	}
 
@@ -68,7 +68,7 @@ func ApplyTemplateToXML(name string, fileContent []byte, templateValues any, tem
 		return nil, fmt.Errorf("unable to parse template: %w", err)
 	}
 
-	if ignoreMissingKey {
+	if deleteMissingKey {
 		if wrapped := wrapMissingKeys(templateValues, tmpl); wrapped != nil {
 			templateValues = wrapped
 		}
@@ -76,6 +76,9 @@ func ApplyTemplateToXML(name string, fileContent []byte, templateValues any, tem
 
 	var buf bytes.Buffer
 	if err := tmpl.Execute(&buf, templateValues); err != nil {
+		if ignoreMissingKey {
+			return fileContent, nil
+		}
 		return nil, fmt.Errorf("unable to execute template: %w", err)
 	}
 

@@ -67,7 +67,7 @@ func TestApplyTemplateToXML_Basic(t *testing.T) {
 	content := `<?xml version="1.0"?><c:chart><c:v>{{.Value}}</c:v></c:chart>`
 
 	funcs := template.FuncMap{}
-	got, err := ApplyTemplateToXML("chart1.xml", []byte(content), map[string]any{"Value": "42"}, funcs, false)
+	got, err := ApplyTemplateToXML("chart1.xml", []byte(content), map[string]any{"Value": "42"}, funcs, false, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -81,17 +81,41 @@ func TestApplyTemplateToXML_IgnoreMissingKey(t *testing.T) {
 
 	funcs := template.FuncMap{}
 	// With ignoreMissingKey=false, this should error
-	_, err := ApplyTemplateToXML("chart2.xml", []byte(content), map[string]any{}, funcs, false)
+	_, err := ApplyTemplateToXML("chart2.xml", []byte(content), map[string]any{}, funcs, false, false)
 	if err == nil {
 		t.Error("expected error for missing key when ignoreMissingKey=false")
 	}
 
-	// With ignoreMissingKey=true, this should succeed
-	got, err := ApplyTemplateToXML("chart2.xml", []byte(content), map[string]any{}, funcs, true)
+	// With ignoreMissingKey=true, this should succeed and keep placeholder
+	got, err := ApplyTemplateToXML("chart2.xml", []byte(content), map[string]any{}, funcs, true, false)
 	if err != nil {
 		t.Fatalf("unexpected error with ignoreMissingKey=true: %v", err)
 	}
 	if !strings.Contains(string(got), "<c:v>") {
 		t.Errorf("expected valid XML output, got %s", string(got))
+	}
+}
+
+func TestApplyTemplateToXML_DeleteMissingKey(t *testing.T) {
+	content := `<?xml version="1.0"?><c:chart><c:v>{{.Missing}}</c:v></c:chart>`
+
+	funcs := template.FuncMap{}
+
+	// With deleteMissingKey=true, missing keys become empty
+	got, err := ApplyTemplateToXML("chart3.xml", []byte(content), map[string]any{}, funcs, false, true)
+	if err != nil {
+		t.Fatalf("unexpected error with deleteMissingKey=true: %v", err)
+	}
+	if !strings.Contains(string(got), "<c:v></c:v>") {
+		t.Errorf("expected empty value, got %s", string(got))
+	}
+
+	// With ignoreMissingKey=true (no delete), placeholder stays
+	got2, err := ApplyTemplateToXML("chart4.xml", []byte(content), map[string]any{}, funcs, true, false)
+	if err != nil {
+		t.Fatalf("unexpected error with ignoreMissingKey=true: %v", err)
+	}
+	if !strings.Contains(string(got2), "{{.Missing}}") {
+		t.Errorf("expected placeholder {{.Missing}} preserved, got %s", string(got2))
 	}
 }

@@ -3,6 +3,8 @@ package gotemplatedocx
 import (
 	"archive/zip"
 	"bytes"
+	"io"
+	"strings"
 	"testing"
 	"text/template"
 
@@ -295,6 +297,81 @@ func TestWithIgnoreMissingKey_SetsTrue(t *testing.T) {
 	if !tpl.ignoreMissingKey {
 		t.Error("expected ignoreMissingKey true")
 	}
+}
+
+func TestWithDeleteMissingKey_SetsTrue(t *testing.T) {
+	tpl := &docxTemplate{}
+	WithDeleteMissingKey()(tpl)
+	if !tpl.deleteMissingKey {
+		t.Error("expected deleteMissingKey true")
+	}
+}
+
+func TestRender_IgnoreMissingKeyPreservesPlaceholder(t *testing.T) {
+	minimal := buildMinimalDocx(t, `{{.Missing}}`)
+	result, err := Render(minimal, map[string]any{},
+		WithIgnoreMissingKey(true),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result) == 0 {
+		t.Fatal("expected non-empty result")
+	}
+	docContent := extractDocxContent(t, result)
+	if !strings.Contains(docContent, "{{.Missing}}") {
+		t.Errorf("expected placeholder {{.Missing}} preserved, got:\n%s", docContent)
+	}
+}
+
+func TestRender_DeleteMissingKeyReplacesWithEmpty(t *testing.T) {
+	minimal := buildMinimalDocx(t, `{{.Missing}}`)
+	result, err := Render(minimal, map[string]any{},
+		WithDeleteMissingKey(),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result) == 0 {
+		t.Fatal("expected non-empty result")
+	}
+	docContent := extractDocxContent(t, result)
+	if strings.Contains(docContent, "{{.Missing}}") {
+		t.Errorf("expected placeholder {{.Missing}} to be deleted, got:\n%s", docContent)
+	}
+}
+
+func TestRender_DefaultErrorsOnMissingKey(t *testing.T) {
+	minimal := buildMinimalDocx(t, `{{.Missing}}`)
+	_, err := Render(minimal, map[string]any{})
+	if err == nil {
+		t.Fatal("expected error for missing key without options")
+	}
+}
+
+// extractDocxContent reads word/document.xml from a DOCX zip byte slice.
+func extractDocxContent(t *testing.T, docxBytes []byte) string {
+	t.Helper()
+	r, err := zip.NewReader(bytes.NewReader(docxBytes), int64(len(docxBytes)))
+	if err != nil {
+		t.Fatalf("failed to open zip: %v", err)
+	}
+	for _, f := range r.File {
+		if f.Name == "word/document.xml" {
+			rc, err := f.Open()
+			if err != nil {
+				t.Fatalf("failed to open %s: %v", f.Name, err)
+			}
+			defer func() { _ = rc.Close() }()
+			data, err := io.ReadAll(rc)
+			if err != nil {
+				t.Fatalf("failed to read %s: %v", f.Name, err)
+			}
+			return string(data)
+		}
+	}
+	t.Fatal("word/document.xml not found in DOCX")
+	return ""
 }
 
 // buildMinimalDocx creates a minimal valid DOCX file for testing.

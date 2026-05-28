@@ -199,6 +199,9 @@ func TestNewDocxTemplateFromBytes_Defaults(t *testing.T) {
 	if tpl.ignoreMissingKey {
 		t.Error("expected ignoreMissingKey default to false")
 	}
+	if tpl.deleteMissingKey {
+		t.Error("expected deleteMissingKey default to false")
+	}
 	if tpl.warnOnMissingKey {
 		t.Error("expected warnOnMissingKey default to false")
 	}
@@ -269,5 +272,30 @@ func TestWithAutoExpandRows_OptionApplied(t *testing.T) {
 	opt(tpl)
 	if len(tpl.filesPreProcessors) == 0 {
 		t.Error("expected pre-processor after WithAutoExpandRows")
+	}
+}
+
+func TestNewDocxTemplateFromBytes_DeleteMissingKey(t *testing.T) {
+	docxBytes := []byte("not a real docx")
+	tpl, err := NewDocxTemplateFromBytes(docxBytes, DeleteMissingKey())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !tpl.deleteMissingKey {
+		t.Error("expected deleteMissingKey true after DeleteMissingKey()")
+	}
+}
+
+func TestWarnOnMissingKey_SetsDeleteMissingKey(t *testing.T) {
+	docxBytes := []byte("not a real docx")
+	tpl, err := NewDocxTemplateFromBytes(docxBytes, WarnOnMissingKey())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !tpl.deleteMissingKey {
+		t.Error("expected deleteMissingKey true after WarnOnMissingKey()")
+	}
+	if !tpl.warnOnMissingKey {
+		t.Error("expected warnOnMissingKey true after WarnOnMissingKey()")
 	}
 }

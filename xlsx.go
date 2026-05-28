@@ -21,7 +21,7 @@ type chartCellAndValue map[string]string
 type xlsxChartsMap map[string]chartCellAndValue
 
 // modifyXlsxInMemory modifies an XLSX byte slice in memory, applying templates.
-func (dt *docxTemplate) modifyXlsxInMemory(xlsxName string, xlsxData []byte, templateValues any, ignoreMissingKey bool) ([]byte, error) {
+func (dt *docxTemplate) modifyXlsxInMemory(xlsxName string, xlsxData []byte, templateValues any, ignoreMissingKey, deleteMissingKey bool) ([]byte, error) {
 	var sharedStringsNumbers map[int]string
 	var sharedStringsNewIndexes map[int]int
 
@@ -51,7 +51,7 @@ func (dt *docxTemplate) modifyXlsxInMemory(xlsxName string, xlsxData []byte, tem
 		return nil, fmt.Errorf("shared strings file '%s' not found in embedded XLSX", docx.SharedStringsPath)
 	}
 
-	sharedStringsContent, err = xlsx.ApplyTemplateToCells(docx.SharedStringsPath, sharedStringsContent, templateValues, ignoreMissingKey)
+	sharedStringsContent, err = xlsx.ApplyTemplateToCells(docx.SharedStringsPath, sharedStringsContent, templateValues, ignoreMissingKey, deleteMissingKey)
 	if err != nil {
 		return nil, fmt.Errorf("error applying template to shared strings: %w", err)
 	}
@@ -109,8 +109,8 @@ func (dt *docxTemplate) modifyXlsxInMemory(xlsxName string, xlsxData []byte, tem
 	return buf.Bytes(), nil
 }
 
-func (dt *docxTemplate) writeXlsxIntoZip(zipWriter *zip.Writer, src zio.FileSource, xlsxFilename string, xlsxData []byte, templateValues any, ignoreMissingKey bool) error {
-	xlsxBytes, err := dt.modifyXlsxInMemory(xlsxFilename, xlsxData, templateValues, ignoreMissingKey)
+func (dt *docxTemplate) writeXlsxIntoZip(zipWriter *zip.Writer, src zio.FileSource, xlsxFilename string, xlsxData []byte, templateValues any, ignoreMissingKey, deleteMissingKey bool) error {
+	xlsxBytes, err := dt.modifyXlsxInMemory(xlsxFilename, xlsxData, templateValues, ignoreMissingKey, deleteMissingKey)
 	if err != nil {
 		return fmt.Errorf("error modifying XLSX in memory: %w", err)
 	}

@@ -48,6 +48,7 @@ type docxTemplate struct {
 	removeEmptyTableRows bool // remove empty table rows in template
 	removeRangeRows      bool // remove empty rows left by {{range}}/{{end}} directives
 	ignoreMissingKey     bool
+	deleteMissingKey     bool
 	// warnOnMissingKey — если true, при обработке шаблона выводит предупреждение
 	// в консоль для каждого плейсхолдера, которого нет в переданных данных.
 	warnOnMissingKey bool
@@ -399,7 +400,7 @@ func (dt *docxTemplate) processXlsxFiles(zipWriter *zip.Writer, src zio.FileSour
 		if !found {
 			break
 		}
-		if err := dt.writeXlsxIntoZip(zipWriter, src, xlsxFilename, xlsxData, templateValues, dt.ignoreMissingKey); err != nil {
+		if err := dt.writeXlsxIntoZip(zipWriter, src, xlsxFilename, xlsxData, templateValues, dt.ignoreMissingKey, dt.deleteMissingKey); err != nil {
 			return fmt.Errorf("unable to apply template to XLSX file '%s': %w", xlsxFilename, err)
 		}
 	}
@@ -494,7 +495,7 @@ func (dt *docxTemplate) processChartFiles(zipWriter *zip.Writer, src zio.FileSou
 		}
 		dt.warnMissingKeysForFile(chartN, src, warnDataMap)
 
-		fileContent, err := docx.ApplyTemplateToXML(chartN, chartContent, templateValues, dt.templateFuncs, dt.ignoreMissingKey)
+		fileContent, err := docx.ApplyTemplateToXML(chartN, chartContent, templateValues, dt.templateFuncs, dt.ignoreMissingKey, dt.deleteMissingKey)
 		if err != nil {
 			return fmt.Errorf("unable to apply template to chart file '%s': %w", chartN, err)
 		}
@@ -549,6 +550,7 @@ func (dt *docxTemplate) applyTemplatePipeline(templateValues any) error {
 	document.SetRemoveEmptyTableRows(dt.removeEmptyTableRows)
 	document.SetRemoveRangeRows(dt.removeRangeRows)
 	document.SetIgnoreMissingKey(dt.ignoreMissingKey)
+	document.SetDeleteMissingKey(dt.deleteMissingKey)
 
 	if err := dt.writeMediaFiles(zipWriter, document.NextImageNumber); err != nil {
 		return err
@@ -669,17 +671,32 @@ func RemoveRangeRows() TemplateOption {
 	}
 }
 
-// IgnoreMissingKey suppresses errors for template keys not present in the data.
+// IgnoreMissingKey suppresses template execution errors when a referenced key
+// is not present in the data. The template expression is left untouched in the
+// output so it can be resolved in a later pass (e.g. with DeleteMissingKey or
+// with the actual data).
 func IgnoreMissingKey() TemplateOption {
 	return func(t *docxTemplate) {
 		t.ignoreMissingKey = true
 	}
 }
 
+// DeleteMissingKey replaces missing template keys with empty strings instead
+// of erroring. Unlike IgnoreMissingKey, the resulting output is clean — no
+// template placeholders remain. This is the option to use when the data for
+// the current pass is final.
+func DeleteMissingKey() TemplateOption {
+	return func(t *docxTemplate) {
+		t.deleteMissingKey = true
+	}
+}
+
 // WarnOnMissingKey enables warnings for missing keys in stderr.
+// Also enables DeleteMissingKey so missing keys are replaced with empty
+// strings (not left as template placeholders for reprocessing).
 func WarnOnMissingKey() TemplateOption {
 	return func(t *docxTemplate) {
-		t.ignoreMissingKey = true
+		t.deleteMissingKey = true
 		t.warnOnMissingKey = true
 	}
 }

@@ -20,6 +20,7 @@ type DocumentProcessor interface {
 	SetRemoveEmptyTableRows(v bool)
 	SetRemoveRangeRows(v bool)
 	SetIgnoreMissingKey(v bool)
+	SetDeleteMissingKey(v bool)
 }
 
 type documentMeta struct {
@@ -39,6 +40,7 @@ type documentMeta struct {
 	RemoveEmptyTableRows bool
 	RemoveRangeRows      bool
 	IgnoreMissingKey     bool
+	DeleteMissingKey     bool
 }
 
 // DocPrIDRoof is the maximum allowed docPr ID value.
@@ -112,6 +114,8 @@ func (d *documentMeta) SetRemoveEmptyTableRows(v bool) { d.RemoveEmptyTableRows 
 func (d *documentMeta) SetRemoveRangeRows(v bool) { d.RemoveRangeRows = v }
 
 func (d *documentMeta) SetIgnoreMissingKey(v bool) { d.IgnoreMissingKey = v }
+
+func (d *documentMeta) SetDeleteMissingKey(v bool) { d.DeleteMissingKey = v }
 
 type sectPr struct {
 	PgSz struct {

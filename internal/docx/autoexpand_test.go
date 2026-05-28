@@ -256,14 +256,14 @@ func TestTryExpandRow_DocxplateFormat(t *testing.T) {
 	if strings.Count(got, "<w:tr>") != 3 {
 		t.Errorf("expected 3 rows, got: %s", got)
 	}
-	if !strings.Contains(got, ".0.") {
-		t.Error("expected original .0. row")
+	if !strings.Contains(got, "index .Pages 0") {
+		t.Error("expected original (index .Pages 0) row")
 	}
-	if !strings.Contains(got, ".1.") {
-		t.Error("expected cloned .1. row")
+	if !strings.Contains(got, "index .Pages 1") {
+		t.Error("expected cloned (index .Pages 1) row")
 	}
-	if !strings.Contains(got, ".2.") {
-		t.Error("expected cloned .2. row")
+	if !strings.Contains(got, "index .Pages 2") {
+		t.Error("expected cloned (index .Pages 2) row")
 	}
 }
 
@@ -311,7 +311,7 @@ func TestTryExpandRow_DocxplateMissingKey(t *testing.T) {
 func TestNormalizeDocxplateRow(t *testing.T) {
 	row := `<w:t>{{Pages.Name}}</w:t><w:t>{{Pages.Page}}</w:t>`
 	got := normalizeDocxplateRow(row, "Pages")
-	expected := `<w:t>{{.Pages.0.Name}}</w:t><w:t>{{.Pages.0.Page}}</w:t>`
+	expected := `<w:t>{{(index .Pages 0).Name}}</w:t><w:t>{{(index .Pages 0).Page}}</w:t>`
 	if got != expected {
 		t.Errorf("expected %q, got %q", expected, got)
 	}
@@ -320,7 +320,7 @@ func TestNormalizeDocxplateRow(t *testing.T) {
 func TestNormalizeDocxplateRow_WithLeadingDot(t *testing.T) {
 	row := `<w:t>{{.Pages.Name}}</w:t>`
 	got := normalizeDocxplateRow(row, "Pages")
-	expected := `<w:t>{{.Pages.0.Name}}</w:t>`
+	expected := `<w:t>{{(index .Pages 0).Name}}</w:t>`
 	if got != expected {
 		t.Errorf("expected %q, got %q", expected, got)
 	}
@@ -329,7 +329,7 @@ func TestNormalizeDocxplateRow_WithLeadingDot(t *testing.T) {
 func TestNormalizeDocxplateRow_OnlyMatchingArray(t *testing.T) {
 	row := `<w:t>{{Pages.Name}}</w:t><w:t>{{Other.Title}}</w:t>`
 	got := normalizeDocxplateRow(row, "Pages")
-	expected := `<w:t>{{.Pages.0.Name}}</w:t><w:t>{{Other.Title}}</w:t>`
+	expected := `<w:t>{{(index .Pages 0).Name}}</w:t><w:t>{{Other.Title}}</w:t>`
 	if got != expected {
 		t.Errorf("expected %q, got %q", expected, got)
 	}

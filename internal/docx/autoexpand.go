@@ -134,8 +134,8 @@ func expandClones(rowXML string, arrayName string, dataMap map[string]any) (stri
 	return sb.String(), nil
 }
 
-// normalizeDocxplateRow rewrites {{ArrayName.Field}} to {{.ArrayName.0.Field}}
-// within all template blocks of rowXML.
+// normalizeDocxplateRow rewrites {{ArrayName.Field}} to {{(index .ArrayName 0).Field}}
+// within all template blocks of rowXML, which is valid Go template syntax.
 func normalizeDocxplateRow(rowXML string, arrayName string) string {
 	quoted := regexp.QuoteMeta(arrayName)
 	re := regexp.MustCompile(`\{\{\s*\.?` + quoted + `\.(\w+)\s*\}\}`)
@@ -144,7 +144,7 @@ func normalizeDocxplateRow(rowXML string, arrayName string) string {
 		if sub == nil {
 			return match
 		}
-		return fmt.Sprintf("{{.%s.0.%s}}", arrayName, sub[1])
+		return fmt.Sprintf("{{(index .%s 0).%s}}", arrayName, sub[1])
 	})
 }
 

@@ -74,7 +74,7 @@ func newDocxTemplate(inputBuffer bytes.Buffer, filename string, options ...Templ
 		relMedia:             []docx.MediaRel{},
 		xlsxChartsMeta:       make(xlsxChartsMap),
 		templateFuncs:        copyTemplateFuncs(docx.TemplateFuncs),
-		filesPreProcessors:   []xml.HandlersMap{},
+		filesPreProcessors:   append([]xml.HandlersMap{}, docx.DefaultPreProcessors...),
 		filesPostProcessors:  append([]xml.HandlersMap{}, docx.DefaultPostProcessors...),
 		removeEmptyTableRows: true,
 		ignoreMissingKey:     false,

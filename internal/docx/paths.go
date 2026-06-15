@@ -10,8 +10,10 @@ const (
 	ContentTypesPath = "[Content_Types].xml"
 	ImagePrefix      = "word/media/image"
 
-	HeaderPathFormat    = "word/header%d.xml"
-	FooterPathFormat    = "word/footer%d.xml"
+	HeaderPathFormat      = "word/header%d.xml"
+	HeaderRelsPathFormat  = "word/_rels/header%d.xml.rels"
+	FooterPathFormat      = "word/footer%d.xml"
+	FooterRelsPathFormat  = "word/_rels/footer%d.xml.rels"
 	ChartPathFormat     = "word/charts/chart%d.xml"
 	ChartRelsPathFormat = "word/charts/_rels/chart%d.xml.rels"
 	XlsxPathFormat      = "word/embeddings/Microsoft_Excel_Worksheet%d.xlsx"

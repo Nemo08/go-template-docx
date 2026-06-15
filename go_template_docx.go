@@ -424,6 +424,7 @@ func (dt *docxTemplate) warnMissingKeysForFile(name string, src zio.FileSource, 
 }
 
 // processHeadersFootersDocument applies templates to header, footer, and main document files.
+// Header and footer image rels are written to their own .rels files; document rels go to dt.relMedia.
 func (dt *docxTemplate) processHeadersFootersDocument(zipWriter *zip.Writer, src zio.FileSource, applyTemplate func(name string, content []byte, data any) ([]byte, []docx.MediaRel, error), templateValues any, warnDataMap map[string]any) error {
 	for i := 1; ; i++ {
 		headerName := fmt.Sprintf(docx.HeaderPathFormat, i)
@@ -439,7 +440,9 @@ func (dt *docxTemplate) processHeadersFootersDocument(zipWriter *zip.Writer, src
 		if err != nil {
 			return fmt.Errorf("unable to apply template to header file '%s': %w", headerName, err)
 		}
-		dt.relMedia = append(dt.relMedia, media...)
+		if err := dt.updateFileRels(zipWriter, src, fmt.Sprintf(docx.HeaderRelsPathFormat, i), media); err != nil {
+			return fmt.Errorf("unable to update header rels for '%s': %w", headerName, err)
+		}
 		if err := zio.RewriteToZip(zipWriter, src, headerName, output); err != nil {
 			return fmt.Errorf("unable to write header file '%s': %w", headerName, err)
 		}
@@ -458,7 +461,9 @@ func (dt *docxTemplate) processHeadersFootersDocument(zipWriter *zip.Writer, src
 		if err != nil {
 			return fmt.Errorf("unable to apply template to footer file '%s': %w", footerName, err)
 		}
-		dt.relMedia = append(dt.relMedia, media...)
+		if err := dt.updateFileRels(zipWriter, src, fmt.Sprintf(docx.FooterRelsPathFormat, i), media); err != nil {
+			return fmt.Errorf("unable to update footer rels for '%s': %w", footerName, err)
+		}
 		if err := zio.RewriteToZip(zipWriter, src, footerName, output); err != nil {
 			return fmt.Errorf("unable to write footer file '%s': %w", footerName, err)
 		}
@@ -513,6 +518,33 @@ func (dt *docxTemplate) processChartFiles(zipWriter *zip.Writer, src zio.FileSou
 		}
 	}
 	return nil
+}
+
+// updateFileRels reads (or creates) a .rels file at relsPath, adds media relationships,
+// and writes it back to the ZIP. Used for header/footer rels files.
+func (dt *docxTemplate) updateFileRels(zipWriter *zip.Writer, src zio.FileSource, relsPath string, media []docx.MediaRel) error {
+	if len(media) == 0 {
+		return nil
+	}
+	relData, found, err := src.ReadFile(relsPath)
+	if err != nil {
+		return fmt.Errorf("unable to read rel file '%s': %w", relsPath, err)
+	}
+	var rel *docx.Relationship
+	if found {
+		rel, err = docx.ParseRelationship(relData)
+		if err != nil {
+			return fmt.Errorf("unable to parse rel file '%s': %w", relsPath, err)
+		}
+	} else {
+		rel = &docx.Relationship{}
+	}
+	rel.AddMediaToRels(media)
+	relContent, err := rel.ToXML()
+	if err != nil {
+		return fmt.Errorf("unable to marshal rels: %w", err)
+	}
+	return zio.RewriteToZip(zipWriter, src, relsPath, relContent)
 }
 
 // updateDocumentRels rewrites the document relationships file with any new media references.

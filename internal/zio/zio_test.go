@@ -187,7 +187,7 @@ func readZipEntry(t *testing.T, data []byte, name string) string {
 	for _, f := range r.File {
 		if f.Name == name {
 			rc, _ := f.Open()
-			defer rc.Close()
+			defer func() { _ = rc.Close() }()
 			buf := new(bytes.Buffer)
 			_, _ = buf.ReadFrom(rc)
 			return buf.String()

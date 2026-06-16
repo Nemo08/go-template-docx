@@ -374,7 +374,7 @@ func TestWarnMissingKeysForFile(t *testing.T) {
 
 	docxBytes := buildMinimalDocx(t, `{{.Missing}}`)
 	tpl.Config.IgnoreMissingKey = true
-	tpl.Apply(docxBytes)
+	_ = tpl.Apply(docxBytes)
 	// no warnings expected for IgnoreMissingKey
 }
 

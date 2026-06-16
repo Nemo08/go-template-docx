@@ -26,27 +26,30 @@
 ## 📋 Оставшиеся шаги
 
 ### Шаг 5. Разделение `internal/docx` на подпакеты
-Текущий `internal/docx` — god-package (~570 символов, 25 файлов).
 
-**Предлагаемое разделение:**
+**✅ Выполнено:**
+- `internal/docx/autoexpand` — `autoexpand.go` + `autoexpand_test.go` (чистый вынос, без internal cross-deps)
 
-| Подпакет | Назначение | Файлы |
-|---|---|---|
-| `internal/docx/templates` | Функции шаблонов | `template_funcs.go`, `template_funcs_placeholders.go`, `apply_template.go`, `wrap_missing_keys.go` |
-| `internal/docx/autoexpand` | AutoExpandRows | `autoexpand.go` |
-| `internal/docx/images` | Изображения и чарты | `media.go`, `chart.go` |
-| `internal/docx/rels` | OOXML relationships | `rel.go` |
-| `internal/docx` (остаётся) | Ядро пакета | `paths.go`, `document.go`, `content_types.go`, `processing.go`, `xml.go`, `preprocessors.go`, `postprocessors.go`, `prefix.go` |
+**❌ Заблокировано (требует дополнительного рефакторинга):**
 
-- `paths.go` — может быть выделен в `internal/docx/paths`, но лучше сохранить в ядре
-- Все публичные типы и константы (если нужны снаружи `internal/docx`) должны остаться в корне пакета или быть экспортированы через реэкспорт
+| Подпакет | Блокировка |
+|---|---|
+| `internal/docx/rels` | `rel.go` использует `MediaRel` из `media.go`; `rel_test.go` использует `MediaRel` + `ImageMediaType` |
+| `internal/docx/images` | `chart.go` использует `PatchXML` и `wrapMissingKeys` (core); `media.go` типы используются `template_funcs_placeholders.go` (методы на `*documentMeta`) |
+| `internal/docx/templates` | `template_funcs_placeholders.go` — методы на `*documentMeta` из `document.go`; использует `Media`/`MediaMap`/`XMLImageData` |
+
+**Ключевая проблема:** циклическая зависимость между core ↔ images/rels/templates из-за `template_funcs_placeholders.go` (методы на `*documentMeta`) и `chart.go` (использует `PatchXML`/`wrapMissingKeys` из core).
+
+**Решение:** требуется предварительный шаг — вынести `MediaRel` и `ImageMediaType` в общий пакет (например, `rels/` или новый `types/`), а `wrapMissingKeys` — встроить в `chart.go` (единственный потребитель). Тогда:
+1. `rels/` → base + `MediaRel`, `ImageMediaType` (core импортирует rels)
+2. `images/` → `chart.go` (использует `xmlutil.PatchXML` напрямую, без core wrapper)
+3. `media.go` → остаётся в core (не может быть вынесен из-за `template_funcs_placeholders.go`)
 
 ### Шаг 6. Проверка импортов
-- Обновить все импорты в `go_template_docx.go`, `internal/xlsx/go_chart.go`, тестах
 - Убедиться, что `internal/xml` нигде не импортируется извне `internal/`
+- Проверить, что все импорты `internal/docx` из внешних проектов обновлены
 
 ### Шаг 7. Финальная проверка
 - `go build ./...`
 - `go vet ./...`
 - `go test -count=1 ./...`
-- `golangci-lint run`

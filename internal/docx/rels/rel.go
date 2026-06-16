@@ -11,9 +11,10 @@ const (
 )
 
 type relationshipDetail struct {
-	Type   string `xml:"Type,attr"`
-	Target string `xml:"Target,attr"`
-	ID     string `xml:"Id,attr"`
+	Type       string `xml:"Type,attr"`
+	Target     string `xml:"Target,attr"`
+	TargetMode string `xml:"TargetMode,attr,omitempty"`
+	ID         string `xml:"Id,attr"`
 }
 
 // Relationship holds parsed relationships from a .rels XML file.

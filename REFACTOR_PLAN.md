@@ -28,22 +28,19 @@
 ### Шаг 5. Разделение `internal/docx` на подпакеты
 
 **✅ Выполнено:**
-- `internal/docx/autoexpand` — `autoexpand.go` + `autoexpand_test.go` (чистый вынос, без internal cross-deps)
+- `internal/docx/autoexpand` — `autoexpand.go` + `autoexpand_test.go`
+- `internal/docx/rels` — `rel.go` + `rel_test.go` + `types.go` (MediaRel, ImageMediaType, XMLStdHeader)
+- `internal/docx/images` — `chart.go` + `chart_test.go` (UpdateChart, ApplyTemplateToXML, ExtractChartFilename)
+- `wrapMissingKeys` → `WrapMissingKeys` (экспортирован для images)
 
-**❌ Заблокировано (требует дополнительного рефакторинга):**
+**❌ Заблокировано (остаётся в core):**
 
-| Подпакет | Блокировка |
+| Почему не вынесено | Причина |
 |---|---|
-| `internal/docx/rels` | `rel.go` использует `MediaRel` из `media.go`; `rel_test.go` использует `MediaRel` + `ImageMediaType` |
-| `internal/docx/images` | `chart.go` использует `PatchXML` и `wrapMissingKeys` (core); `media.go` типы используются `template_funcs_placeholders.go` (методы на `*documentMeta`) |
-| `internal/docx/templates` | `template_funcs_placeholders.go` — методы на `*documentMeta` из `document.go`; использует `Media`/`MediaMap`/`XMLImageData` |
-
-**Ключевая проблема:** циклическая зависимость между core ↔ images/rels/templates из-за `template_funcs_placeholders.go` (методы на `*documentMeta`) и `chart.go` (использует `PatchXML`/`wrapMissingKeys` из core).
-
-**Решение:** требуется предварительный шаг — вынести `MediaRel` и `ImageMediaType` в общий пакет (например, `rels/` или новый `types/`), а `wrapMissingKeys` — встроить в `chart.go` (единственный потребитель). Тогда:
-1. `rels/` → base + `MediaRel`, `ImageMediaType` (core импортирует rels)
-2. `images/` → `chart.go` (использует `xmlutil.PatchXML` напрямую, без core wrapper)
-3. `media.go` → остаётся в core (не может быть вынесен из-за `template_funcs_placeholders.go`)
+| `media.go` (Media, MediaMap) | `computeDocxImageSize` — метод на `*documentMeta` из `document.go` |
+| `template_funcs*.go` | `template_funcs_placeholders.go` — методы на `*documentMeta`; используют Media, MediaMap, XMLImageData |
+| `apply_template.go` | методы на `*documentMeta`; использует WrapMissingKeys, PatchXML |
+| `wrap_missing_keys.go` | `EscapeTemplateValues` используется внешне; `WrapMissingKeys` используется `apply_template.go` (core) и `images/chart.go` |
 
 ### Шаг 6. Проверка импортов
 - Убедиться, что `internal/xml` нигде не импортируется извне `internal/`

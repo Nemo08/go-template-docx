@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	"github.com/JJJJJJack/go-template-docx/internal/xmlutil"
-	"github.com/JJJJJJack/go-template-docx/xml"
+	"github.com/JJJJJJack/go-template-docx/internal/xml"
 )
 
 var reExpandRow = regexp.MustCompile(

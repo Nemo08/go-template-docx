@@ -3,7 +3,7 @@ package gotemplatedocx
 import (
 	"text/template"
 
-	"github.com/JJJJJJack/go-template-docx/xml"
+	"github.com/JJJJJJack/go-template-docx/internal/xml"
 )
 
 // RenderOption configures the DOCX template rendering.

@@ -23,24 +23,30 @@ type DocumentProcessor interface {
 	SetDeleteMissingKey(v bool)
 }
 
-type documentMeta struct {
-	docPrIDsBijectiveIndex uint32
-	docPrIDs               []uint32
-	// greaterCNvPrId         uint64
-	greaterRId uint64
-	// greaterWP14DocId       uint64
-	greaterPictureNumber uint64
-	// greaterChartNumber     uint64
-	greaterImageNumber uint64
-	maxWidthInches     float64
-	maxHeightInches    float64
-	templateFuncs      template.FuncMap
-	mediaMap           MediaMap
-	// Options
+// documentConfig holds immutable configuration for document processing.
+type documentConfig struct {
+	maxWidthInches    float64
+	maxHeightInches   float64
+	templateFuncs     template.FuncMap
+	mediaMap          MediaMap
 	RemoveEmptyTableRows bool
 	RemoveRangeRows      bool
 	IgnoreMissingKey     bool
 	DeleteMissingKey     bool
+}
+
+// documentState holds mutable state during document processing.
+type documentState struct {
+	docPrIDsBijectiveIndex uint32
+	docPrIDs               []uint32
+	greaterRId             uint64
+	greaterPictureNumber   uint64
+	greaterImageNumber     uint64
+}
+
+type documentMeta struct {
+	documentConfig
+	documentState
 }
 
 // DocPrIDRoof is the maximum allowed docPr ID value.
@@ -159,7 +165,9 @@ var (
 // ParseDocumentMeta extracts document metadata and builds a DocumentProcessor from a DOCX archive.
 func ParseDocumentMeta(source zio.FileSource, tf template.FuncMap) (DocumentProcessor, error) {
 	d := documentMeta{
-		templateFuncs: tf,
+		documentConfig: documentConfig{
+			templateFuncs: tf,
+		},
 	}
 
 	// work on word/document.xml

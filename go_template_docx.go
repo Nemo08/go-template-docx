@@ -19,7 +19,7 @@ import (
 	docxtemplate "github.com/JJJJJJack/go-template-docx/internal/template"
 	"github.com/JJJJJJack/go-template-docx/internal/xmlutil"
 	"github.com/JJJJJJack/go-template-docx/internal/zio"
-	"github.com/JJJJJJack/go-template-docx/xml"
+	"github.com/JJJJJJack/go-template-docx/internal/xml"
 )
 
 var (

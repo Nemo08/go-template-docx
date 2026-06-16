@@ -2,7 +2,7 @@ package docx
 
 import (
 	"github.com/JJJJJJack/go-template-docx/internal/xmlutil"
-	"github.com/JJJJJJack/go-template-docx/xml"
+	"github.com/JJJJJJack/go-template-docx/internal/xml"
 )
 
 // DefaultPreProcessors holds the default XML pre-processors that are

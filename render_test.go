@@ -10,7 +10,7 @@ import (
 
 	"github.com/JJJJJJack/go-template-docx/internal/docx"
 	"github.com/JJJJJJack/go-template-docx/internal/zio"
-	"github.com/JJJJJJack/go-template-docx/xml"
+	"github.com/JJJJJJack/go-template-docx/internal/xml"
 )
 
 func TestRender_InvalidBytes(t *testing.T) {

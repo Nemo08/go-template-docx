@@ -4,7 +4,7 @@ import (
 	"strings"
 
 	"github.com/JJJJJJack/go-template-docx/internal/xmlutil"
-	"github.com/JJJJJJack/go-template-docx/xml"
+	"github.com/JJJJJJack/go-template-docx/internal/xml"
 )
 
 // DefaultPostProcessors holds the default XML post-processors that are

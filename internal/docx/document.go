@@ -171,8 +171,6 @@ func ParseDocumentMeta(source zio.FileSource, tf template.FuncMap) (DocumentProc
 		},
 	}
 
-	// work on word/document.xml
-
 	documentContent, found, err := source.ReadFile(DocumentXMLPath)
 	if err != nil {
 		return nil, fmt.Errorf("error reading zip file content: %w", err)
@@ -186,70 +184,84 @@ func ParseDocumentMeta(source zio.FileSource, tf template.FuncMap) (DocumentProc
 		return nil, fmt.Errorf("could not parse document settings: %w", err)
 	}
 
-	docPrAttrsMatches := reDocPr.FindAllStringSubmatch(string(documentContent), -1)
-	d.docPrIDs = make([]uint32, 0, len(docPrAttrsMatches))
-	for _, m := range docPrAttrsMatches {
-		docPrID, err := strconv.ParseUint(m[1], 10, 32)
-		if err != nil {
-			return nil, fmt.Errorf("could not parse DocPr ID '%s': %w", m[1], err)
-		}
-
-		d.docPrIDs = append(d.docPrIDs, uint32(docPrID))
-
-		pictureNumber, err := strconv.ParseUint(m[2], 10, 64)
-		if err != nil {
-			return nil, fmt.Errorf("could not parse Picture Number '%s': %w", m[2], err)
-		}
-
-		if pictureNumber > d.greaterPictureNumber {
-			d.greaterPictureNumber = pictureNumber
-		}
-	}
-
-	// work on word/_rels/document.xml.rels
-
-	wordDocumentRelsContent, found, err := source.ReadFile(DocumentRelsPath)
+	d.docPrIDs, d.greaterPictureNumber, err = parseDocPrIDs(documentContent)
 	if err != nil {
-		return nil, fmt.Errorf("could not read zip file content: %w", err)
-	}
-	if !found {
-		return nil, fmt.Errorf("%s not found in zip", DocumentRelsPath)
+		return nil, err
 	}
 
-	rIDMatches := reRId.FindAllStringSubmatch(string(wordDocumentRelsContent), -1)
-	for _, match := range rIDMatches {
-		num, err := strconv.ParseUint(match[1], 10, 64)
-		if err != nil {
-			return nil, fmt.Errorf("could not parse rId '%s': %w", match[1], err)
-		}
-
-		if num > d.greaterRId {
-			d.greaterRId = num
-		}
+	d.greaterRId, err = parseMaxRId(source)
+	if err != nil {
+		return nil, err
 	}
 
-	// work on word/media/images
-	err = source.Each(func(filename string) error {
-		if !reImagePrefix.MatchString(filename) {
-			return nil
-		}
-
-		imageNumberStr := strings.TrimPrefix(filename, ImagePrefix)
-		imageNumberStr = strings.TrimSuffix(imageNumberStr, path.Ext(filename))
-
-		imageNumber, err := strconv.ParseUint(imageNumberStr, 10, 64)
-		if err != nil {
-			return fmt.Errorf("could not parse image number from filename '%s': %w", filename, err)
-		}
-
-		if imageNumber > d.greaterImageNumber {
-			d.greaterImageNumber = imageNumber
-		}
-		return nil
-	})
+	d.greaterImageNumber, err = parseMaxImageNumber(source)
 	if err != nil {
 		return nil, err
 	}
 
 	return &d, nil
+}
+
+func parseDocPrIDs(documentContent []byte) ([]uint32, uint64, error) {
+	matches := reDocPr.FindAllStringSubmatch(string(documentContent), -1)
+	ids := make([]uint32, 0, len(matches))
+	var maxPicNum uint64
+	for _, m := range matches {
+		id, err := strconv.ParseUint(m[1], 10, 32)
+		if err != nil {
+			return nil, 0, fmt.Errorf("could not parse DocPr ID '%s': %w", m[1], err)
+		}
+		ids = append(ids, uint32(id))
+
+		picNum, err := strconv.ParseUint(m[2], 10, 64)
+		if err != nil {
+			return nil, 0, fmt.Errorf("could not parse Picture Number '%s': %w", m[2], err)
+		}
+		if picNum > maxPicNum {
+			maxPicNum = picNum
+		}
+	}
+	return ids, maxPicNum, nil
+}
+
+func parseMaxRId(source zio.FileSource) (uint64, error) {
+	content, found, err := source.ReadFile(DocumentRelsPath)
+	if err != nil {
+		return 0, fmt.Errorf("could not read zip file content: %w", err)
+	}
+	if !found {
+		return 0, fmt.Errorf("%s not found in zip", DocumentRelsPath)
+	}
+
+	var maxRId uint64
+	for _, match := range reRId.FindAllStringSubmatch(string(content), -1) {
+		num, err := strconv.ParseUint(match[1], 10, 64)
+		if err != nil {
+			return 0, fmt.Errorf("could not parse rId '%s': %w", match[1], err)
+		}
+		if num > maxRId {
+			maxRId = num
+		}
+	}
+	return maxRId, nil
+}
+
+func parseMaxImageNumber(source zio.FileSource) (uint64, error) {
+	var maxNum uint64
+	err := source.Each(func(filename string) error {
+		if !reImagePrefix.MatchString(filename) {
+			return nil
+		}
+		numStr := strings.TrimPrefix(filename, ImagePrefix)
+		numStr = strings.TrimSuffix(numStr, path.Ext(filename))
+		num, err := strconv.ParseUint(numStr, 10, 64)
+		if err != nil {
+			return fmt.Errorf("could not parse image number from filename '%s': %w", filename, err)
+		}
+		if num > maxNum {
+			maxNum = num
+		}
+		return nil
+	})
+	return maxNum, err
 }

@@ -3,7 +3,6 @@
 package xml
 
 import (
-	"archive/zip"
 	"bytes"
 	"fmt"
 
@@ -30,7 +29,7 @@ func ProcessedOutput(filesProcessorsMaps []HandlersMap, outputBuffer *bytes.Buff
 		}
 
 		outputBuffer.Reset()
-		outputZipWriter := zip.NewWriter(outputBuffer)
+		outputZipWriter := zio.NewZipWriter(outputBuffer)
 
 		err = src.Each(func(filename string) error {
 			processors := filesPostProcessorsMap[filename]

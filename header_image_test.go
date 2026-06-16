@@ -8,6 +8,8 @@ import (
 	"io"
 	"strings"
 	"testing"
+
+	"github.com/JJJJJJack/go-template-docx/internal/zio"
 )
 
 // minimalPNG creates a valid 1x1 red pixel PNG.
@@ -27,7 +29,7 @@ func minimalPNG() []byte {
 func buildDocxWithHeader(t *testing.T, headerBody string) []byte {
 	t.Helper()
 	var buf bytes.Buffer
-	w := zip.NewWriter(&buf)
+	w := zio.NewZipWriter(&buf)
 
 	// [Content_Types].xml
 	ct, _ := w.Create("[Content_Types].xml")

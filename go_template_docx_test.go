@@ -91,9 +91,8 @@ func TestToStringMap_NonMapType(t *testing.T) {
 }
 
 func TestNormalizeTemplateValues_MapStringAny(t *testing.T) {
-	dt := &docxTemplate{}
 	input := map[string]any{"key": "val"}
-	got := dt.normalizeTemplateValues(input)
+	got := (&TemplateConfig{}).normalize(input)
 	m, ok := got.(map[string]any)
 	if !ok {
 		t.Fatalf("expected map[string]any, got %T", got)
@@ -104,25 +103,20 @@ func TestNormalizeTemplateValues_MapStringAny(t *testing.T) {
 }
 
 func TestNormalizeTemplateValues_NilValues(t *testing.T) {
-	// normalizeTemplateValues doesn't handle nil replacement itself -
-	// this is done in Apply. For map[string]any, it returns as-is.
-	dt := &docxTemplate{}
 	input := map[string]any{"key": nil}
-	got := dt.normalizeTemplateValues(input)
+	got := (&TemplateConfig{}).normalize(input)
 	m, ok := got.(map[string]any)
 	if !ok {
 		t.Fatalf("expected map[string]any, got %T", got)
 	}
-	// Pass through - nil stays nil
 	if m["key"] != nil {
 		t.Errorf("expected nil preserved, got %v", m["key"])
 	}
 }
 
 func TestNormalizeTemplateValues_MapStringString(t *testing.T) {
-	dt := &docxTemplate{}
 	input := map[string]string{"key": "val"}
-	got := dt.normalizeTemplateValues(input)
+	got := (&TemplateConfig{}).normalize(input)
 	m, ok := got.(map[string]any)
 	if !ok {
 		t.Fatalf("expected map[string]any, got %T", got)
@@ -133,9 +127,8 @@ func TestNormalizeTemplateValues_MapStringString(t *testing.T) {
 }
 
 func TestNormalizeTemplateValues_JSONBytes(t *testing.T) {
-	dt := &docxTemplate{}
 	input := []byte(`{"key":"val"}`)
-	got := dt.normalizeTemplateValues(input)
+	got := (&TemplateConfig{}).normalize(input)
 	m, ok := got.(map[string]any)
 	if !ok {
 		t.Fatalf("expected map[string]any, got %T", got)
@@ -146,9 +139,8 @@ func TestNormalizeTemplateValues_JSONBytes(t *testing.T) {
 }
 
 func TestNormalizeTemplateValues_EmptyJSONBytes(t *testing.T) {
-	dt := &docxTemplate{}
 	input := []byte(`{}`)
-	got := dt.normalizeTemplateValues(input)
+	got := (&TemplateConfig{}).normalize(input)
 	m, ok := got.(map[string]any)
 	if !ok {
 		t.Fatalf("expected map[string]any, got %T", got)
@@ -159,29 +151,35 @@ func TestNormalizeTemplateValues_EmptyJSONBytes(t *testing.T) {
 }
 
 func TestNormalizeTemplateValues_Passthrough(t *testing.T) {
-	dt := &docxTemplate{}
 	input := 42
-	got := dt.normalizeTemplateValues(input)
+	got := (&TemplateConfig{}).normalize(input)
 	if got != 42 {
 		t.Errorf("expected passthrough, got %v", got)
 	}
 }
 
 func TestWarnMissingKeysInFile_NoMissing(t *testing.T) {
-	dt := &docxTemplate{filename: "test.docx", missingKeyLogger: slog.New(slog.NewTextHandler(os.Stderr, nil))}
+	p := &TemplateProcessor{
+		Config: &TemplateConfig{
+			Filename:         "test.docx",
+			MissingKeyLogger: slog.New(slog.NewTextHandler(os.Stderr, nil)),
+		},
+	}
 	tmpl := template.Must(template.New("test").Parse(`{{.Name}}`))
 	data := map[string]any{"Name": "test"}
-	// Should not panic or error
-	dt.warnMissingKeysInFile(tmpl, data)
+	p.warnMissingKeysInFile(tmpl, data)
 }
 
 func TestWarnMissingKeysInFile_SkipsVars(t *testing.T) {
-	dt := &docxTemplate{filename: "test.docx", missingKeyLogger: slog.New(slog.NewTextHandler(os.Stderr, nil))}
-	// $i and $v are loop variables, should be skipped by warnMissingKeysInFile
+	p := &TemplateProcessor{
+		Config: &TemplateConfig{
+			Filename:         "test.docx",
+			MissingKeyLogger: slog.New(slog.NewTextHandler(os.Stderr, nil)),
+		},
+	}
 	tmpl := template.Must(template.New("test").Parse(`{{range $i, $v := .Items}}{{$i}}{{$v}}{{end}}`))
 	data := map[string]any{}
-	// $vars should be skipped, not warned - should not panic
-	dt.warnMissingKeysInFile(tmpl, data)
+	p.warnMissingKeysInFile(tmpl, data)
 }
 
 func TestNewDocxTemplateFromBytes_Defaults(t *testing.T) {
@@ -193,17 +191,17 @@ func TestNewDocxTemplateFromBytes_Defaults(t *testing.T) {
 	if tpl == nil {
 		t.Fatal("expected non-nil template")
 	}
-	if !tpl.removeEmptyTableRows {
-		t.Error("expected removeEmptyTableRows default to true")
+	if !tpl.Config.RemoveEmptyTableRows {
+		t.Error("expected RemoveEmptyTableRows default to true")
 	}
-	if tpl.ignoreMissingKey {
-		t.Error("expected ignoreMissingKey default to false")
+	if tpl.Config.IgnoreMissingKey {
+		t.Error("expected IgnoreMissingKey default to false")
 	}
-	if tpl.deleteMissingKey {
-		t.Error("expected deleteMissingKey default to false")
+	if tpl.Config.DeleteMissingKey {
+		t.Error("expected DeleteMissingKey default to false")
 	}
-	if tpl.warnOnMissingKey {
-		t.Error("expected warnOnMissingKey default to false")
+	if tpl.Config.WarnOnMissingKey {
+		t.Error("expected WarnOnMissingKey default to false")
 	}
 }
 
@@ -213,31 +211,31 @@ func TestNewDocxTemplateFromBytes_WithOptions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !tpl.ignoreMissingKey {
-		t.Error("expected ignoreMissingKey true after option")
+	if !tpl.Config.IgnoreMissingKey {
+		t.Error("expected IgnoreMissingKey true after option")
 	}
-	if tpl.removeEmptyTableRows {
-		t.Error("expected removeEmptyTableRows false after NoRemoveEmptyTableRows")
+	if tpl.Config.RemoveEmptyTableRows {
+		t.Error("expected RemoveEmptyTableRows false after NoRemoveEmptyTableRows")
 	}
 }
 
 func TestMedia(t *testing.T) {
-	dt := &docxTemplate{media: make(docx.MediaMap)}
+	dt := &docxTemplate{State: TemplateState{Media: make(docx.MediaMap)}}
 	dt.Media("test.png", []byte("image data"))
-	if len(dt.media) != 1 {
-		t.Errorf("expected 1 media, got %d", len(dt.media))
+	if len(dt.State.Media) != 1 {
+		t.Errorf("expected 1 media, got %d", len(dt.State.Media))
 	}
-	if dt.media["test.png"] == nil {
+	if dt.State.Media["test.png"] == nil {
 		t.Error("expected media entry")
 	}
 }
 
 func TestAddTemplateFuncs(t *testing.T) {
-	dt := &docxTemplate{templateFuncs: copyTemplateFuncs(docx.TemplateFuncs)}
+	dt := &docxTemplate{Config: TemplateConfig{TemplateFuncs: copyTemplateFuncs(docx.TemplateFuncs)}}
 	dt.AddTemplateFuncs(template.FuncMap{
 		"custom": func() string { return "custom" },
 	})
-	if _, ok := dt.templateFuncs["custom"]; !ok {
+	if _, ok := dt.Config.TemplateFuncs["custom"]; !ok {
 		t.Error("expected custom func to be added")
 	}
 }
@@ -256,7 +254,7 @@ func TestAutoExpandRows_OptionApplied(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(tpl.filesPreProcessors) == 0 {
+	if len(tpl.Config.PreProcessors) == 0 {
 		t.Error("expected at least one pre-processor registered")
 	}
 }
@@ -270,7 +268,7 @@ func TestWithAutoExpandRows_OptionApplied(t *testing.T) {
 	}
 	opt := WithAutoExpandRows(data)
 	opt(tpl)
-	if len(tpl.filesPreProcessors) == 0 {
+	if len(tpl.Config.PreProcessors) == 0 {
 		t.Error("expected pre-processor after WithAutoExpandRows")
 	}
 }
@@ -281,8 +279,8 @@ func TestNewDocxTemplateFromBytes_DeleteMissingKey(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !tpl.deleteMissingKey {
-		t.Error("expected deleteMissingKey true after DeleteMissingKey()")
+	if !tpl.Config.DeleteMissingKey {
+		t.Error("expected DeleteMissingKey true after DeleteMissingKey()")
 	}
 }
 
@@ -292,10 +290,10 @@ func TestWarnOnMissingKey_SetsDeleteMissingKey(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !tpl.deleteMissingKey {
-		t.Error("expected deleteMissingKey true after WarnOnMissingKey()")
+	if !tpl.Config.DeleteMissingKey {
+		t.Error("expected DeleteMissingKey true after WarnOnMissingKey()")
 	}
-	if !tpl.warnOnMissingKey {
-		t.Error("expected warnOnMissingKey true after WarnOnMissingKey()")
+	if !tpl.Config.WarnOnMissingKey {
+		t.Error("expected WarnOnMissingKey true after WarnOnMissingKey()")
 	}
 }

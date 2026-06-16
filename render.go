@@ -40,14 +40,14 @@ func WithPostProcessors(m ...xml.HandlersMap) RenderOption {
 // WithRemoveEmptyTableRows enables or disables empty table row removal (default: true).
 func WithRemoveEmptyTableRows(v bool) RenderOption {
 	return func(t *docxTemplate) {
-		t.removeEmptyTableRows = v
+		t.Config.RemoveEmptyTableRows = v
 	}
 }
 
 // WithRemoveRangeRows enables or disables range directive row removal (default: false).
 func WithRemoveRangeRows(v bool) RenderOption {
 	return func(t *docxTemplate) {
-		t.removeRangeRows = v
+		t.Config.RemoveRangeRows = v
 	}
 }
 
@@ -57,7 +57,7 @@ func WithRemoveRangeRows(v bool) RenderOption {
 // output for a later template pass.
 func WithIgnoreMissingKey(v bool) RenderOption {
 	return func(t *docxTemplate) {
-		t.ignoreMissingKey = v
+		t.Config.IgnoreMissingKey = v
 	}
 }
 
@@ -66,7 +66,7 @@ func WithIgnoreMissingKey(v bool) RenderOption {
 // clean — no template placeholders remain.
 func WithDeleteMissingKey() RenderOption {
 	return func(t *docxTemplate) {
-		t.deleteMissingKey = true
+		t.Config.DeleteMissingKey = true
 	}
 }
 
@@ -138,25 +138,25 @@ func (b *RenderBuilder) WithPostProcessors(m ...xml.HandlersMap) *RenderBuilder 
 
 // WithRemoveEmptyTableRows enables or disables empty table row removal.
 func (b *RenderBuilder) WithRemoveEmptyTableRows(v bool) *RenderBuilder {
-	b.tpl.removeEmptyTableRows = v
+	b.tpl.Config.RemoveEmptyTableRows = v
 	return b
 }
 
 // WithRemoveRangeRows enables or disables range directive row removal.
 func (b *RenderBuilder) WithRemoveRangeRows(v bool) *RenderBuilder {
-	b.tpl.removeRangeRows = v
+	b.tpl.Config.RemoveRangeRows = v
 	return b
 }
 
 // WithIgnoreMissingKey enables or disables missing key ignoring.
 func (b *RenderBuilder) WithIgnoreMissingKey(v bool) *RenderBuilder {
-	b.tpl.ignoreMissingKey = v
+	b.tpl.Config.IgnoreMissingKey = v
 	return b
 }
 
 // WithDeleteMissingKey replaces missing template keys with empty strings.
 func (b *RenderBuilder) WithDeleteMissingKey() *RenderBuilder {
-	b.tpl.deleteMissingKey = true
+	b.tpl.Config.DeleteMissingKey = true
 	return b
 }
 

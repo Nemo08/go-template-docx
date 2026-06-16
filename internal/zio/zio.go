@@ -2,13 +2,21 @@ package zio
 
 import (
 	"archive/zip"
+	"bytes"
 	"fmt"
+	"io"
 )
 
 // FileSource provides content-based access to files within an archive.
 type FileSource interface {
 	ReadFile(name string) (data []byte, found bool, err error)
 	Each(fn func(name string) error) error
+}
+
+// ZipWriter defines the interface for writing to a zip archive.
+type ZipWriter interface {
+	Create(name string) (io.Writer, error)
+	Close() error
 }
 
 // NewFromBytes creates a FileSource from zip bytes.
@@ -20,8 +28,13 @@ func NewFromBytes(data []byte) (FileSource, error) {
 	return &zipMapSrc{zm: zm}, nil
 }
 
+// NewZipWriter creates a ZipWriter from a bytes.Buffer.
+func NewZipWriter(buf *bytes.Buffer) ZipWriter {
+	return zip.NewWriter(buf)
+}
+
 // CopyToZip copies a file from the source archive into the zip writer.
-func CopyToZip(w *zip.Writer, src FileSource, name string) error {
+func CopyToZip(w ZipWriter, src FileSource, name string) error {
 	data, found, err := src.ReadFile(name)
 	if err != nil {
 		return fmt.Errorf("unable to read file '%s': %w", name, err)
@@ -40,7 +53,7 @@ func CopyToZip(w *zip.Writer, src FileSource, name string) error {
 }
 
 // RewriteToZip replaces a file in the zip writer with new content.
-func RewriteToZip(w *zip.Writer, _ FileSource, name string, content []byte) error {
+func RewriteToZip(w ZipWriter, _ FileSource, name string, content []byte) error {
 	fw, err := w.Create(name)
 	if err != nil {
 		return fmt.Errorf("unable to create '%s' in zip: %w", name, err)

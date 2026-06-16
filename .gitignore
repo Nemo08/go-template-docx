@@ -10,3 +10,4 @@ cmd/
 assets/
 makefile
 internal/mydebug/
+AGENTS.md

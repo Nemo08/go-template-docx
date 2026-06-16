@@ -9,6 +9,7 @@ import (
 	"text/template"
 
 	"github.com/JJJJJJack/go-template-docx/internal/docx"
+	"github.com/JJJJJJack/go-template-docx/internal/zio"
 	"github.com/JJJJJJack/go-template-docx/xml"
 )
 
@@ -126,68 +127,68 @@ func TestRender_WithMultipleOpts(t *testing.T) {
 }
 
 func TestWithFuncs_SetsFuncMap(t *testing.T) {
-	tpl := &docxTemplate{templateFuncs: copyTemplateFuncs(make(template.FuncMap))}
+	tpl := &docxTemplate{Config: TemplateConfig{TemplateFuncs: copyTemplateFuncs(make(template.FuncMap))}}
 	fn := func() string { return "result" }
 	WithFuncs(template.FuncMap{"myfn": fn})(tpl)
-	if _, ok := tpl.templateFuncs["myfn"]; !ok {
+	if _, ok := tpl.Config.TemplateFuncs["myfn"]; !ok {
 		t.Error("expected myfn to be added")
 	}
 }
 
 func TestWithImage_SetsMedia(t *testing.T) {
-	tpl := &docxTemplate{media: make(docx.MediaMap)}
+	tpl := &docxTemplate{State: TemplateState{Media: make(docx.MediaMap)}}
 	WithImage("test.png", []byte("data"))(tpl)
-	if len(tpl.media) != 1 {
-		t.Errorf("expected 1 media, got %d", len(tpl.media))
+	if len(tpl.State.Media) != 1 {
+		t.Errorf("expected 1 media, got %d", len(tpl.State.Media))
 	}
-	if tpl.media["test.png"] == nil {
+	if tpl.State.Media["test.png"] == nil {
 		t.Error("expected media entry")
 	}
 }
 
 func TestWithPreProcessors_Appends(t *testing.T) {
 	tpl := &docxTemplate{
-		filesPreProcessors: []xml.HandlersMap{},
+		Config: TemplateConfig{PreProcessors: []xml.HandlersMap{}},
 	}
 	m := xml.HandlersMap{"test.xml": {}}
 	WithPreProcessors(m)(tpl)
-	if len(tpl.filesPreProcessors) != 1 {
-		t.Errorf("expected 1 pre-processor map, got %d", len(tpl.filesPreProcessors))
+	if len(tpl.Config.PreProcessors) != 1 {
+		t.Errorf("expected 1 pre-processor map, got %d", len(tpl.Config.PreProcessors))
 	}
 }
 
 func TestWithPostProcessors_Appends(t *testing.T) {
 	tpl := &docxTemplate{
-		filesPostProcessors: []xml.HandlersMap{},
+		Config: TemplateConfig{PostProcessors: []xml.HandlersMap{}},
 	}
 	m := xml.HandlersMap{"test.xml": {}}
 	WithPostProcessors(m)(tpl)
-	if len(tpl.filesPostProcessors) != 1 {
-		t.Errorf("expected 1 post-processor map, got %d", len(tpl.filesPostProcessors))
+	if len(tpl.Config.PostProcessors) != 1 {
+		t.Errorf("expected 1 post-processor map, got %d", len(tpl.Config.PostProcessors))
 	}
 }
 
 func TestWithRemoveEmptyTableRows_SetsFalse(t *testing.T) {
 	tpl := &docxTemplate{}
 	WithRemoveEmptyTableRows(false)(tpl)
-	if tpl.removeEmptyTableRows {
-		t.Error("expected removeEmptyTableRows false")
+	if tpl.Config.RemoveEmptyTableRows {
+		t.Error("expected RemoveEmptyTableRows false")
 	}
 }
 
 func TestWithRemoveEmptyTableRows_SetsTrue(t *testing.T) {
 	tpl := &docxTemplate{}
 	WithRemoveEmptyTableRows(true)(tpl)
-	if !tpl.removeEmptyTableRows {
-		t.Error("expected removeEmptyTableRows true")
+	if !tpl.Config.RemoveEmptyTableRows {
+		t.Error("expected RemoveEmptyTableRows true")
 	}
 }
 
 func TestWithRemoveRangeRows_SetsTrue(t *testing.T) {
 	tpl := &docxTemplate{}
 	WithRemoveRangeRows(true)(tpl)
-	if !tpl.removeRangeRows {
-		t.Error("expected removeRangeRows true")
+	if !tpl.Config.RemoveRangeRows {
+		t.Error("expected RemoveRangeRows true")
 	}
 }
 
@@ -294,16 +295,16 @@ func TestRenderBuilder_InvalidBytes(t *testing.T) {
 func TestWithIgnoreMissingKey_SetsTrue(t *testing.T) {
 	tpl := &docxTemplate{}
 	WithIgnoreMissingKey(true)(tpl)
-	if !tpl.ignoreMissingKey {
-		t.Error("expected ignoreMissingKey true")
+	if !tpl.Config.IgnoreMissingKey {
+		t.Error("expected IgnoreMissingKey true")
 	}
 }
 
 func TestWithDeleteMissingKey_SetsTrue(t *testing.T) {
 	tpl := &docxTemplate{}
 	WithDeleteMissingKey()(tpl)
-	if !tpl.deleteMissingKey {
-		t.Error("expected deleteMissingKey true")
+	if !tpl.Config.DeleteMissingKey {
+		t.Error("expected DeleteMissingKey true")
 	}
 }
 
@@ -378,7 +379,7 @@ func extractDocxContent(t *testing.T, docxBytes []byte) string {
 func buildMinimalDocx(t *testing.T, documentBody string) []byte {
 	t.Helper()
 	var buf bytes.Buffer
-	w := zip.NewWriter(&buf)
+	w := zio.NewZipWriter(&buf)
 
 	// [Content_Types].xml
 	ct, _ := w.Create("[Content_Types].xml")

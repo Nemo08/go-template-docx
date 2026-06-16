@@ -546,35 +546,22 @@ func (p *TemplateProcessor) modifyXlsxInMemory(xlsxName string, xlsxData []byte,
 		return nil, err
 	}
 
-	sharedStringsContent, found, err := xlsxSrc.ReadFile(docx.SharedStringsPath)
-	if err != nil {
-		return nil, fmt.Errorf("error reading file '%s': %w", docx.SharedStringsPath, err)
-	}
-	if !found {
-		return nil, fmt.Errorf("shared strings file '%s' not found in embedded XLSX", docx.SharedStringsPath)
-	}
-
-	sharedStringsContent, err = xlsx.ApplyTemplateToCells(docx.SharedStringsPath, sharedStringsContent, templateValues, ignoreMissingKey, deleteMissingKey)
-	if err != nil {
-		return nil, fmt.Errorf("error applying template to shared strings: %w", err)
-	}
-
-	sharedStringsContent, sharedStringsNumbers, sharedStringsNewIndexes, err := xlsx.GetReferencedSharedStringsByIndexAndCleanup(sharedStringsContent)
-	if err != nil {
-		return nil, fmt.Errorf("error cleaning up shared strings: %w", err)
-	}
-
-	sharedStringsCount, err := p.processXlsxSheets(zipWriter, xlsxSrc, sharedStringsNumbers, sharedStringsNewIndexes, xlsxName)
+	ssContent, ssNumbers, ssNewIndexes, err := loadAndProcessSharedStrings(xlsxSrc, templateValues, ignoreMissingKey, deleteMissingKey)
 	if err != nil {
 		return nil, err
 	}
 
-	sharedStringsContent, err = xlsx.UpdateSharedStringsCounts(sharedStringsContent, sharedStringsCount)
+	ssCount, err := p.processXlsxSheets(zipWriter, xlsxSrc, ssNumbers, ssNewIndexes, xlsxName)
+	if err != nil {
+		return nil, err
+	}
+
+	ssContent, err = xlsx.UpdateSharedStringsCounts(ssContent, ssCount)
 	if err != nil {
 		return nil, fmt.Errorf("error recounting shared strings: %w", err)
 	}
 
-	if err := zio.RewriteToZip(zipWriter, xlsxSrc, docx.SharedStringsPath, sharedStringsContent); err != nil {
+	if err := zio.RewriteToZip(zipWriter, xlsxSrc, docx.SharedStringsPath, ssContent); err != nil {
 		return nil, fmt.Errorf("error writing shared strings: %w", err)
 	}
 
@@ -583,6 +570,28 @@ func (p *TemplateProcessor) modifyXlsxInMemory(xlsxName string, xlsxData []byte,
 	}
 
 	return buf.Bytes(), nil
+}
+
+func loadAndProcessSharedStrings(xlsxSrc zio.FileSource, templateValues any, ignoreMissingKey, deleteMissingKey bool) ([]byte, map[int]string, map[int]int, error) {
+	ssContent, found, err := xlsxSrc.ReadFile(docx.SharedStringsPath)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("error reading file '%s': %w", docx.SharedStringsPath, err)
+	}
+	if !found {
+		return nil, nil, nil, fmt.Errorf("shared strings file '%s' not found in embedded XLSX", docx.SharedStringsPath)
+	}
+
+	ssContent, err = xlsx.ApplyTemplateToCells(docx.SharedStringsPath, ssContent, templateValues, ignoreMissingKey, deleteMissingKey)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("error applying template to shared strings: %w", err)
+	}
+
+	ssContent, ssNumbers, ssNewIndexes, err := xlsx.GetReferencedSharedStringsByIndexAndCleanup(ssContent)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("error cleaning up shared strings: %w", err)
+	}
+
+	return ssContent, ssNumbers, ssNewIndexes, nil
 }
 
 func copyNonMatchingXlsxFiles(zipWriter zio.ZipWriter, xlsxSrc zio.FileSource) error {

@@ -23,9 +23,31 @@
 - `loadAndProcessSharedStrings` — чтение + шаблонизация + чистка shared strings (complexity 5)
 - `processXlsxSheets` — цикл по листам с chartValues (complexity 7)
 
+### Шаг 5. Разбивка `ParseDocumentMeta` (complexity 17 → 7)
+- `parseDocPrIDs` — поиск docPr ID в XML (complexity 5)
+- `parseMaxRId` — поиск макс. rId в rels (complexity 6)
+- `parseMaxImageNumber` — поиск макс. номера изображения (complexity 4)
+
+### Шаг 6. Разбивка `applyShapesBgFillColor` (complexity 11 → 4)
+- `applySolidFill` — обработка solidFill (complexity 3)
+- `applyVmlGradientFill` — обработка gradientFill (complexity 6)
+
+### Шаг 7. Разбивка `processHeadersFootersDocument` (complexity 17 → 7)
+- `processFileSequence` — универсальный циклический обработчик нумерованных файлов (complexity 7)
+
+### Шаг 8. Разбивка `ProcessedOutput` (complexity 12 → 5)
+- `processFileWithHandlers` — обработка одного файла через цепочку Handler (complexity 6)
+
+### Шаг 9. Разбивка `formatStylesTags` (complexity 13 → 4)
+- `dispatchStyleTag` — маршрутизация по типу стиля (complexity 5)
+- `parseFontSizeStyle` — fontSize/fs (complexity 3)
+- `parseColorStyle` — #hex (complexity 3)
+- `parseShadingStyle` — bg: (complexity 3)
+- `parseNamedStyle` — named (b/i/u/s) (complexity 3)
+
 ## 📋 Оставшиеся шаги
 
-### Шаг 5. Разделение `internal/docx` на подпакеты
+### Шаг 10. Разделение `internal/docx` на подпакеты
 
 **✅ Выполнено:**
 - `internal/docx/autoexpand` — `autoexpand.go` + `autoexpand_test.go`
@@ -42,11 +64,26 @@
 | `apply_template.go` | методы на `*documentMeta`; использует WrapMissingKeys, PatchXML |
 | `wrap_missing_keys.go` | `EscapeTemplateValues` используется внешне; `WrapMissingKeys` используется `apply_template.go` (core) и `images/chart.go` |
 
-### Шаг 6. Проверка импортов
+### Шаг 11. Снижение оставшихся complexity > 10 (необязательно)
+
+Осталось 6 функций с HIGH, все — type-switch по AST/Go-типам. Разбиение даёт мало выгоды:
+
+| Функция | Complexity | Тип | Причина HIGH |
+|---------|-----------|-----|-------------|
+| `extractFieldNamesRec` | 16 | type-switch | switch по 12+ нодам шаблона |
+| `collectVariables` | 15 | type-switch | switch по нодам шаблона |
+| `defaultVal` | 14 | type-switch | switch по 10+ Go-типам |
+| `aggregateCol` | 13 | type-switch | switch по операциям (sum/avg/count) |
+| `applyTemplatePipeline` | 13 | pipeline | 11 последовательных err-check-ов |
+| `WrapMissingKeys` | 12 | type-switch | switch по 3 типам + range + if |
+
+**Решение:** Оставить, т.к. каждый case тривиален (1-3 строки), разбиение не улучшит читаемость.
+
+### Шаг 12. Проверка импортов
 - Убедиться, что `internal/xml` нигде не импортируется извне `internal/`
 - Проверить, что все импорты `internal/docx` из внешних проектов обновлены
 
-### Шаг 7. Финальная проверка
+### Шаг 13. Финальная проверка
 - `go build ./...`
 - `go vet ./...`
 - `go test -count=1 ./...`

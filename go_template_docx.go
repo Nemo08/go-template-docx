@@ -463,7 +463,10 @@ func buildChartXlsxMap(src zio.FileSource) (map[string]string, error) {
 		if !found {
 			break
 		}
-		chartsRelationships, _ := rels.ParseRelationship(fileContent)
+		chartsRelationships, err := rels.ParseRelationship(fileContent)
+		if err != nil {
+			return nil, fmt.Errorf("unable to parse chart rels file '%s': %w", relsChartFilename, err)
+		}
 		for _, relationship := range chartsRelationships.Relationships {
 			if !reXlsxEmbedded.MatchString(relationship.Target) {
 				continue

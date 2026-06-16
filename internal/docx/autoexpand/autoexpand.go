@@ -21,6 +21,9 @@ var reAnyIndex = regexp.MustCompile(`(\.)(\d+)(\.)`)
 // reDocxplateVar matches docxplate-like references: {{ArrayName.Field}} or {{.ArrayName.Field}}.
 var reDocxplateVar = regexp.MustCompile(`\{\{\s*\.?(\w+)\.(\w+)\s*\}\}`)
 
+// reIndexPattern matches the "index .X N" function call to replace N.
+var reIndexPattern = regexp.MustCompile(`(\bindex\s+\.\w+\s+)\d+`)
+
 // AutoExpandRowsPreProcessor returns an xml.HandlersMap that rewrites
 // expandable table rows in word/document.xml before the Go template engine
 // runs. It needs the template data to determine actual slice lengths.
@@ -153,8 +156,7 @@ func rewriteIndex(rowXML string, i int) string {
 		out := reAnyIndex.ReplaceAllStringFunc(block, func(_ string) string {
 			return fmt.Sprintf(".%d.", i)
 		})
-		out = regexp.MustCompile(`(\bindex\s+\.\w+\s+)\d+`).
-			ReplaceAllString(out, fmt.Sprintf("${1}%d", i))
+		out = reIndexPattern.ReplaceAllString(out, fmt.Sprintf("${1}%d", i))
 		return out
 	})
 	return result

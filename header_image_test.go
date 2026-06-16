@@ -98,7 +98,7 @@ func extractFromZip(t *testing.T, docxBytes []byte, name string) []byte {
 				t.Fatalf("failed to open %s: %v", f.Name, err)
 			}
 			data, err := io.ReadAll(rc)
-			rc.Close()
+			_ = rc.Close()
 			if err != nil {
 				t.Fatalf("failed to read %s: %v", f.Name, err)
 			}

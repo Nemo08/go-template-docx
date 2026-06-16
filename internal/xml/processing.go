@@ -62,6 +62,7 @@ func ProcessedOutput(filesProcessorsMaps []HandlersMap, outputBuffer *bytes.Buff
 			return processFileWithHandlers(outputZipWriter, src, filename, filesPostProcessorsMap[filename], preOrPost)
 		})
 		if err != nil {
+			_ = outputZipWriter.Close()
 			return err
 		}
 

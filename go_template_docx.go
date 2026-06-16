@@ -163,14 +163,14 @@ func (c *TemplateConfig) normalize(templateValues any) any {
 	return templateValues
 }
 
-// normalizeTemplateValues нормализует данные шаблона к map[string]any.
-func (dt *docxTemplate) normalizeTemplateValues(templateValues any) any {
-	return dt.Config.normalize(templateValues)
-}
-
 // applyTemplatePipeline runs the core template pipeline: parse input, apply template, write output.
-func (p *TemplateProcessor) applyTemplatePipeline(templateValues any) error {
+func (p *TemplateProcessor) applyTemplatePipeline(templateValues any) (err error) {
 	zipWriter := zio.NewZipWriter(&p.State.Output)
+	defer func() {
+		if closeErr := zipWriter.Close(); closeErr != nil && err == nil {
+			err = closeErr
+		}
+	}()
 
 	src, err := zio.NewFromBytes(p.State.Input.Bytes())
 	if err != nil {
@@ -225,7 +225,7 @@ func (p *TemplateProcessor) applyTemplatePipeline(templateValues any) error {
 		return err
 	}
 
-	return zipWriter.Close()
+	return nil
 }
 
 // writeMediaFiles writes media files into the ZIP and assigns Word-compatible filenames.
@@ -273,7 +273,7 @@ func (p *TemplateProcessor) updateContentTypes(zipWriter zio.ZipWriter, src zio.
 	if err != nil {
 		return fmt.Errorf("unable to marshal content types to XML: %w", err)
 	}
-	return zio.RewriteToZip(zipWriter, src, docx.ContentTypesPath, []byte(updatedCt))
+	return zio.RewriteToZip(zipWriter, src, docx.ContentTypesPath, updatedCt)
 }
 
 // parseDocumentRels parses the document relationships file.
@@ -530,7 +530,7 @@ func (p *TemplateProcessor) processChartFiles(zipWriter zio.ZipWriter, src zio.F
 }
 
 // modifyXlsxInMemory modifies an XLSX byte slice in memory, applying templates.
-func (p *TemplateProcessor) modifyXlsxInMemory(xlsxName string, xlsxData []byte, templateValues any, ignoreMissingKey, deleteMissingKey bool) ([]byte, error) {
+func (p *TemplateProcessor) modifyXlsxInMemory(xlsxName string, xlsxData []byte, templateValues any, ignoreMissingKey, deleteMissingKey bool) (result []byte, err error) {
 	xlsxSrc, err := zio.NewFromBytes(xlsxData)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse XLSX zip: %w", err)
@@ -538,6 +538,11 @@ func (p *TemplateProcessor) modifyXlsxInMemory(xlsxName string, xlsxData []byte,
 
 	var buf bytes.Buffer
 	zipWriter := zio.NewZipWriter(&buf)
+	defer func() {
+		if closeErr := zipWriter.Close(); closeErr != nil && err == nil {
+			err = fmt.Errorf("error closing zip writer: %w", closeErr)
+		}
+	}()
 
 	if err := copyNonMatchingXlsxFiles(zipWriter, xlsxSrc); err != nil {
 		return nil, err
@@ -560,10 +565,6 @@ func (p *TemplateProcessor) modifyXlsxInMemory(xlsxName string, xlsxData []byte,
 
 	if err := zio.RewriteToZip(zipWriter, xlsxSrc, docx.SharedStringsPath, ssContent); err != nil {
 		return nil, fmt.Errorf("error writing shared strings: %w", err)
-	}
-
-	if err := zipWriter.Close(); err != nil {
-		return nil, fmt.Errorf("error closing zip writer: %w", err)
 	}
 
 	return buf.Bytes(), nil

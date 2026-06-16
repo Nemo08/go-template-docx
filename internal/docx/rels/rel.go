@@ -1,8 +1,10 @@
-package docx
+package rels
 
 import (
 	"encoding/xml"
 )
+
+var XMLStdHeader = []byte(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>`)
 
 const (
 	imageRelationship = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image"
@@ -50,8 +52,8 @@ func (r *Relationship) ToXML() ([]byte, error) {
 		return []byte{}, err
 	}
 
-	xmlBytes := make([]byte, 0, len(xmlStdHeader)+len(output))
-	xmlBytes = append(xmlBytes, xmlStdHeader...)
+	xmlBytes := make([]byte, 0, len(XMLStdHeader)+len(output))
+	xmlBytes = append(xmlBytes, XMLStdHeader...)
 	xmlBytes = append(xmlBytes, output...)
 
 	return xmlBytes, nil

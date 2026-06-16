@@ -7,7 +7,7 @@ import (
 
 func TestWrapMissingKeys_MapStringAny(t *testing.T) {
 	data := map[string]any{"a": "hello", "b": nil}
-	got := wrapMissingKeys(data, nil)
+	got := WrapMissingKeys(data, nil)
 	if got["a"] != "hello" {
 		t.Errorf("a = %q, want %q", got["a"], "hello")
 	}
@@ -18,20 +18,20 @@ func TestWrapMissingKeys_MapStringAny(t *testing.T) {
 
 func TestWrapMissingKeys_MapStringString(t *testing.T) {
 	data := map[string]string{"a": "hello"}
-	got := wrapMissingKeys(data, nil)
+	got := WrapMissingKeys(data, nil)
 	if got["a"] != "hello" {
 		t.Errorf("a = %q, want %q", got["a"], "hello")
 	}
 }
 
 func TestWrapMissingKeys_DefaultReturnsNil(t *testing.T) {
-	if got := wrapMissingKeys(42, nil); got != nil {
+	if got := WrapMissingKeys(42, nil); got != nil {
 		t.Errorf("expected nil, got %v", got)
 	}
-	if got := wrapMissingKeys("str", nil); got != nil {
+	if got := WrapMissingKeys("str", nil); got != nil {
 		t.Errorf("expected nil, got %v", got)
 	}
-	if got := wrapMissingKeys(nil, nil); got != nil {
+	if got := WrapMissingKeys(nil, nil); got != nil {
 		t.Errorf("expected nil, got %v", got)
 	}
 }
@@ -39,7 +39,7 @@ func TestWrapMissingKeys_DefaultReturnsNil(t *testing.T) {
 func TestWrapMissingKeys_AddsMissingFromTemplate(t *testing.T) {
 	tmpl := template.Must(template.New("test").Parse(`{{.Name}} {{.Age}}`))
 	data := map[string]any{"Name": "John"}
-	got := wrapMissingKeys(data, tmpl)
+	got := WrapMissingKeys(data, tmpl)
 	if got["Name"] != "John" {
 		t.Errorf("Name = %q, want %q", got["Name"], "John")
 	}
@@ -51,7 +51,7 @@ func TestWrapMissingKeys_AddsMissingFromTemplate(t *testing.T) {
 func TestWrapMissingKeys_DoesNotOverwriteExisting(t *testing.T) {
 	tmpl := template.Must(template.New("test").Parse(`{{.Name}}`))
 	data := map[string]any{"Name": "John"}
-	got := wrapMissingKeys(data, tmpl)
+	got := WrapMissingKeys(data, tmpl)
 	if got["Name"] != "John" {
 		t.Errorf("Name = %q, want %q", got["Name"], "John")
 	}
@@ -59,7 +59,7 @@ func TestWrapMissingKeys_DoesNotOverwriteExisting(t *testing.T) {
 
 func TestWrapMissingKeys_NilTemplate(t *testing.T) {
 	data := map[string]any{"a": "val"}
-	got := wrapMissingKeys(data, nil)
+	got := WrapMissingKeys(data, nil)
 	if len(got) != 1 {
 		t.Errorf("expected 1 key, got %d", len(got))
 	}
@@ -70,7 +70,7 @@ func TestWrapMissingKeys_TemplateWithRangeAndIf(t *testing.T) {
 		`{{range .Items}}{{.Name}}{{end}}{{if .Visible}}yes{{end}}`,
 	))
 	data := map[string]any{}
-	got := wrapMissingKeys(data, tmpl)
+	got := WrapMissingKeys(data, tmpl)
 	if _, ok := got["Items"]; !ok {
 		t.Error("expected Items key from range")
 	}
@@ -82,7 +82,7 @@ func TestWrapMissingKeys_TemplateWithRangeAndIf(t *testing.T) {
 func TestWrapMissingKeys_EmptyTemplate(t *testing.T) {
 	tmpl := template.Must(template.New("test").Parse(``))
 	data := map[string]any{"a": "b"}
-	got := wrapMissingKeys(data, tmpl)
+	got := WrapMissingKeys(data, tmpl)
 	if got["a"] != "b" {
 		t.Errorf("a = %q, want %q", got["a"], "b")
 	}

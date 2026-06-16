@@ -9,12 +9,13 @@ import (
 	"strings"
 	"text/template"
 
+	"github.com/JJJJJJack/go-template-docx/internal/docx/rels"
 	"github.com/JJJJJJack/go-template-docx/internal/zio"
 )
 
 // DocumentProcessor defines the interface for applying templates to DOCX parts.
 type DocumentProcessor interface {
-	ApplyTemplate(name string, content []byte, data any) (output []byte, media []MediaRel, err error)
+	ApplyTemplate(name string, content []byte, data any) (output []byte, media []rels.MediaRel, err error)
 	NextImageNumber() uint64
 	SetMediaMap(mm MediaMap)
 	SetRemoveEmptyTableRows(v bool)

@@ -8,12 +8,14 @@ import (
 	"strconv"
 	"strings"
 	"text/template"
+
+	"github.com/JJJJJJack/go-template-docx/internal/docx/rels"
 )
 
 var reImagePlaceholder = regexp.MustCompile(`\[\[IMAGE:.*?\]\]`)
 
-func (d *documentMeta) applyImages(srcXML string) (string, []MediaRel, error) {
-	mediaRels := []MediaRel{}
+func (d *documentMeta) applyImages(srcXML string) (string, []rels.MediaRel, error) {
+	mediaRels := []rels.MediaRel{}
 
 	xmlBlocks := reImagePlaceholder.FindAllString(srcXML, -1)
 	for _, xmlBlock := range xmlBlocks {
@@ -56,8 +58,8 @@ func (d *documentMeta) applyImages(srcXML string) (string, []MediaRel, error) {
 			return srcXML, mediaRels, fmt.Errorf("unable to execute image template: %w", err)
 		}
 
-		mediaRels = append(mediaRels, MediaRel{
-			Type:   ImageMediaType,
+		mediaRels = append(mediaRels, rels.MediaRel{
+			Type:   rels.ImageMediaType,
 			RefID:  rID,
 			Source: path.Join("media", v.WordFilename),
 		})
@@ -81,9 +83,9 @@ var (
 
 // replaceImages looks for [[REPLACE_IMAGE:filename.ext]] placeholders inside <w:drawing>...</w:drawing> blocks
 // remove the placeholder and replaces the image reference inside the block with the given image's rID.
-func (d *documentMeta) replaceImages(srcXML string) (string, []MediaRel) {
+func (d *documentMeta) replaceImages(srcXML string) (string, []rels.MediaRel) {
 
-	mediaRels := []MediaRel{}
+	mediaRels := []rels.MediaRel{}
 	result := srcXML
 	if d.mediaMap != nil {
 		result = reDrawingBlock.ReplaceAllStringFunc(srcXML, func(block string) string {
@@ -111,8 +113,8 @@ func (d *documentMeta) replaceImages(srcXML string) (string, []MediaRel) {
 				return block
 			}
 
-			mediaRels = append(mediaRels, MediaRel{
-				Type:   ImageMediaType,
+			mediaRels = append(mediaRels, rels.MediaRel{
+				Type:   rels.ImageMediaType,
 				RefID:  rID,
 				Source: path.Join("media", media.WordFilename),
 			})

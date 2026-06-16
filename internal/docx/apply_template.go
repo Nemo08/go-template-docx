@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"text/template"
 
+	"github.com/JJJJJJack/go-template-docx/internal/docx/rels"
 	"github.com/JJJJJJack/go-template-docx/internal/xmlutil"
 )
 
@@ -34,7 +35,7 @@ func (d *documentMeta) wrapData(data any, tmpl *template.Template) any {
 	if !d.DeleteMissingKey {
 		return data
 	}
-	if wrapped := wrapMissingKeys(data, tmpl); wrapped != nil {
+	if wrapped := WrapMissingKeys(data, tmpl); wrapped != nil {
 		return wrapped
 	}
 	return data
@@ -63,7 +64,7 @@ func (d *documentMeta) postProcessContent(output string) string {
 	return output
 }
 
-func (d *documentMeta) ApplyTemplate(name string, content []byte, data any) ([]byte, []MediaRel, error) {
+func (d *documentMeta) ApplyTemplate(name string, content []byte, data any) ([]byte, []rels.MediaRel, error) {
 	content = d.prepareContent(content)
 
 	tmpl, err := d.parseTemplate(name, string(content))

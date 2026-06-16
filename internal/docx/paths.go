@@ -1,8 +1,5 @@
 package docx
 
-// xmlStdHeader is the standard XML declaration used for OOXML files.
-var xmlStdHeader = []byte(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>`)
-
 // Standard OOXML paths used in DOCX processing.
 const (
 	DocumentXMLPath  = "word/document.xml"

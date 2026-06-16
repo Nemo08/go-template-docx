@@ -7,10 +7,10 @@ import (
 	"text/template/parse"
 )
 
-// wrapMissingKeys converts data to map[string]any and replaces nil with "".
+// WrapMissingKeys converts data to map[string]any and replaces nil with "".
 // It finds all template variables and adds missing keys with "" value
 // to avoid "<no value>" rendering with missingkey=zero.
-func wrapMissingKeys(data any, tmpl *template.Template) map[string]any {
+func WrapMissingKeys(data any, tmpl *template.Template) map[string]any {
 	var m map[string]any
 
 	switch v := data.(type) {

@@ -9,31 +9,17 @@ import (
 	"math"
 )
 
-// ImageMediaType is a media type constant for images.
-const (
-	ImageMediaType = iota + 1
-)
-
 const (
 	emusPerInch = 914400.0
 	defaultDPI  = 96.0
 )
 
-// Media holds binary data and the assigned Word-compatible filename for an embedded image.
 type Media struct {
 	Data         []byte
 	WordFilename string
 }
 
-// MediaMap maps original filenames to their Media entries.
 type MediaMap map[string]*Media
-
-// MediaRel describes a single media file relationship.
-type MediaRel struct {
-	Type   uint
-	RefID  string
-	Source string
-}
 
 func (d *documentMeta) computeDocxImageSize(imageData []byte) (int, int, error) {
 	cfg, _, err := stdimage.DecodeConfig(bytes.NewReader(imageData))

@@ -1,4 +1,4 @@
-package docx
+package images
 
 import (
 	"bytes"
@@ -7,6 +7,9 @@ import (
 	"strconv"
 	"strings"
 	"text/template"
+
+	"github.com/JJJJJJack/go-template-docx/internal/docx"
+	"github.com/JJJJJJack/go-template-docx/internal/xmlutil"
 )
 
 var (
@@ -63,13 +66,13 @@ func ApplyTemplateToXML(name string, fileContent []byte, templateValues any, tem
 	tmpl, err := template.New(name).
 		Option(missingKeyOpt).
 		Funcs(templateFuncs).
-		Parse(PatchXML(string(fileContent)))
+		Parse(xmlutil.PatchXML(string(fileContent)))
 	if err != nil {
 		return nil, fmt.Errorf("unable to parse template: %w", err)
 	}
 
 	if deleteMissingKey {
-		if wrapped := wrapMissingKeys(templateValues, tmpl); wrapped != nil {
+		if wrapped := docx.WrapMissingKeys(templateValues, tmpl); wrapped != nil {
 			templateValues = wrapped
 		}
 	}

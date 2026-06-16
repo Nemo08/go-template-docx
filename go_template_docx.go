@@ -16,6 +16,8 @@ import (
 
 	"github.com/JJJJJJack/go-template-docx/internal/docx"
 	"github.com/JJJJJJack/go-template-docx/internal/docx/autoexpand"
+	"github.com/JJJJJJack/go-template-docx/internal/docx/images"
+	"github.com/JJJJJJack/go-template-docx/internal/docx/rels"
 	"github.com/JJJJJJack/go-template-docx/internal/xlsx"
 	docxtemplate "github.com/JJJJJJack/go-template-docx/internal/template"
 	"github.com/JJJJJJack/go-template-docx/internal/xmlutil"
@@ -57,8 +59,8 @@ type TemplateConfig struct {
 type TemplateState struct {
 	Input      bytes.Buffer
 	Output     bytes.Buffer
-	Rel        *docx.Relationship
-	RelMedia   []docx.MediaRel
+	Rel        *rels.Relationship
+	RelMedia   []rels.MediaRel
 	Media      docx.MediaMap
 	XlsxCharts xlsxChartsMap
 }
@@ -95,8 +97,8 @@ func newDocxTemplate(inputBuffer bytes.Buffer, filename string, options ...Templ
 			Input:      inputBuffer,
 			Output:     bytes.Buffer{},
 			Media:      make(docx.MediaMap),
-			Rel:        &docx.Relationship{},
-			RelMedia:   []docx.MediaRel{},
+			Rel:        &rels.Relationship{},
+			RelMedia:   []rels.MediaRel{},
 			XlsxCharts: make(xlsxChartsMap),
 		},
 	}
@@ -283,7 +285,7 @@ func (p *TemplateProcessor) parseDocumentRels(src zio.FileSource) error {
 	if !found {
 		return fmt.Errorf("rel file '%s' not found", docx.DocumentRelsPath)
 	}
-	p.State.Rel, err = docx.ParseRelationship(relData)
+	p.State.Rel, err = rels.ParseRelationship(relData)
 	if err != nil {
 		return fmt.Errorf("unable to parse rel file '%s': %w", docx.DocumentRelsPath, err)
 	}
@@ -313,7 +315,7 @@ func (p *TemplateProcessor) processXlsxFiles(zipWriter zio.ZipWriter, src zio.Fi
 
 // processHeadersFootersDocument applies templates to header, footer, and main document files.
 // Header and footer image rels are written to their own .rels files; document rels go to State.RelMedia.
-func (p *TemplateProcessor) processHeadersFootersDocument(zipWriter zio.ZipWriter, src zio.FileSource, applyTemplate func(name string, content []byte, data any) ([]byte, []docx.MediaRel, error), templateValues any, warnDataMap map[string]any) error {
+func (p *TemplateProcessor) processHeadersFootersDocument(zipWriter zio.ZipWriter, src zio.FileSource, applyTemplate func(name string, content []byte, data any) ([]byte, []rels.MediaRel, error), templateValues any, warnDataMap map[string]any) error {
 	for i := 1; ; i++ {
 		headerName := fmt.Sprintf(docx.HeaderPathFormat, i)
 		data, found, err := src.ReadFile(headerName)
@@ -414,7 +416,7 @@ func (p *TemplateProcessor) warnMissingKeysInFile(tmpl *template.Template, data 
 
 // updateFileRels reads (or creates) a .rels file at relsPath, adds media relationships,
 // and writes it back to the ZIP. Used for header/footer rels files.
-func (p *TemplateProcessor) updateFileRels(zipWriter zio.ZipWriter, src zio.FileSource, relsPath string, media []docx.MediaRel) error {
+func (p *TemplateProcessor) updateFileRels(zipWriter zio.ZipWriter, src zio.FileSource, relsPath string, media []rels.MediaRel) error {
 	if len(media) == 0 {
 		return nil
 	}
@@ -422,14 +424,14 @@ func (p *TemplateProcessor) updateFileRels(zipWriter zio.ZipWriter, src zio.File
 	if err != nil {
 		return fmt.Errorf("unable to read rel file '%s': %w", relsPath, err)
 	}
-	var rel *docx.Relationship
+	var rel *rels.Relationship
 	if found {
-		rel, err = docx.ParseRelationship(relData)
+		rel, err = rels.ParseRelationship(relData)
 		if err != nil {
 			return fmt.Errorf("unable to parse rel file '%s': %w", relsPath, err)
 		}
 	} else {
-		rel = &docx.Relationship{}
+		rel = &rels.Relationship{}
 	}
 	rel.AddMediaToRels(media)
 	relContent, err := rel.ToXML()
@@ -470,13 +472,13 @@ func buildChartXlsxMap(src zio.FileSource) (map[string]string, error) {
 		if !found {
 			break
 		}
-		chartsRelationships, _ := docx.ParseRelationship(fileContent)
+		chartsRelationships, _ := rels.ParseRelationship(fileContent)
 		for _, relationship := range chartsRelationships.Relationships {
 			if !reXlsxEmbedded.MatchString(relationship.Target) {
 				continue
 			}
 			targetXlsxFilename := strings.Replace(relationship.Target, "../", "word/", 1)
-			chartFilename, err := docx.ExtractChartFilename(relsChartFilename)
+			chartFilename, err := images.ExtractChartFilename(relsChartFilename)
 			if err != nil {
 				return nil, fmt.Errorf("unable to extract chart name from file '%s': %w", relsChartFilename, err)
 			}
@@ -513,16 +515,16 @@ func (p *TemplateProcessor) processChartFiles(zipWriter zio.ZipWriter, src zio.F
 		}
 		p.warnMissingKeysForFile(chartN, src, warnDataMap)
 
-		fileContent, err := docx.ApplyTemplateToXML(chartN, chartContent, templateValues, p.Config.TemplateFuncs, p.Config.IgnoreMissingKey, p.Config.DeleteMissingKey)
+		fileContent, err := images.ApplyTemplateToXML(chartN, chartContent, templateValues, p.Config.TemplateFuncs, p.Config.IgnoreMissingKey, p.Config.DeleteMissingKey)
 		if err != nil {
 			return fmt.Errorf("unable to apply template to chart file '%s': %w", chartN, err)
 		}
-		chartFilename, err := docx.ExtractChartFilename(chartN)
+		chartFilename, err := images.ExtractChartFilename(chartN)
 		if err != nil {
 			return fmt.Errorf("unable to extract chart name from file '%s': %w", chartN, err)
 		}
 		xlsxFileTarget := chartRelToTargetXlsx[chartFilename]
-		fileContent, err = docx.UpdateChart(fileContent, p.State.XlsxCharts[xlsxFileTarget])
+		fileContent, err = images.UpdateChart(fileContent, p.State.XlsxCharts[xlsxFileTarget])
 		if err != nil {
 			return fmt.Errorf("unable to update preview chart file '%s': %w", chartN, err)
 		}

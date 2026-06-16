@@ -3,6 +3,8 @@ package docx
 import (
 	"bytes"
 	"encoding/xml"
+
+	"github.com/JJJJJJack/go-template-docx/internal/docx/rels"
 )
 
 type tagDefault struct {
@@ -60,8 +62,8 @@ func (ct *contentTypes) ToXML() ([]byte, error) {
 
 	output = replaceEmptyTags(output)
 
-	xmlBytes := make([]byte, 0, len(xmlStdHeader)+len(output))
-	xmlBytes = append(xmlBytes, xmlStdHeader...)
+	xmlBytes := make([]byte, 0, len(rels.XMLStdHeader)+len(output))
+	xmlBytes = append(xmlBytes, rels.XMLStdHeader...)
 	xmlBytes = append(xmlBytes, output...)
 
 	return xmlBytes, nil

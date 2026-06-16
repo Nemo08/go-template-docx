@@ -631,9 +631,9 @@ func TestPadRight(t *testing.T) {
 	}
 }
 
-// ─── extraFuncMap completeness ────────────────────────────────────────────────
+// ─── TemplateFuncs extra functions ──────────────────────────────────────────
 
-func TestExtraFuncMap_ContainsAll(t *testing.T) {
+func TestTemplateFuncs_ContainsExtra(t *testing.T) {
 	required := []string{
 		"formatNum", "formatDate", "formatDateRU",
 		"hideRow", "pageBreak",
@@ -641,8 +641,8 @@ func TestExtraFuncMap_ContainsAll(t *testing.T) {
 		"truncate", "romanNum", "padRight",
 	}
 	for _, name := range required {
-		if _, ok := extraFuncMap[name]; !ok {
-			t.Errorf("extraFuncMap missing %q", name)
+		if _, ok := TemplateFuncs[name]; !ok {
+			t.Errorf("TemplateFuncs missing %q", name)
 		}
 	}
 }

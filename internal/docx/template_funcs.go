@@ -101,19 +101,34 @@ type styleEntry struct {
 	dupKey string
 }
 
-var namedStyles = map[string]styleEntry{
-	"b":             {boldWTag, boldWTag},
-	"bold":          {boldWTag, boldWTag},
-	"i":             {italicWTag, italicWTag},
-	"italic":        {italicWTag, italicWTag},
-	"u":             {underlineWTag, underlineWTag},
-	"underline":     {underlineWTag, underlineWTag},
-	"s":             {strikethroughWTag, strikethroughWTag},
-	"strike":        {strikethroughWTag, strikethroughWTag},
-	"strikethrough": {strikethroughWTag, strikethroughWTag},
-}
+var namedStyles = func() map[string]styleEntry {
+	m := map[string]styleEntry{
+		"b":             {boldWTag, boldWTag},
+		"bold":          {boldWTag, boldWTag},
+		"i":             {italicWTag, italicWTag},
+		"italic":        {italicWTag, italicWTag},
+		"u":             {underlineWTag, underlineWTag},
+		"underline":     {underlineWTag, underlineWTag},
+		"s":             {strikethroughWTag, strikethroughWTag},
+		"strike":        {strikethroughWTag, strikethroughWTag},
+		"strikethrough": {strikethroughWTag, strikethroughWTag},
+	}
+	for _, c := range highlightColorNames {
+		m[c] = styleEntry{
+			tag:    fmt.Sprintf(highlightWTagF, c),
+			dupKey: "<w:highlight w:val=",
+		}
+	}
+	return m
+}()
 
-var validHighlightColor map[string]struct{}
+var validHighlightColor = func() map[string]struct{} {
+	m := make(map[string]struct{}, len(highlightColorNames))
+	for _, c := range highlightColorNames {
+		m[c] = struct{}{}
+	}
+	return m
+}()
 
 var highlightColorNames = []string{
 	"black", "blue", "cyan", "green",
@@ -316,7 +331,7 @@ func tableCellBgColor(hex string) (string, error) {
 	return fmt.Sprintf("[[TABLE_CELL_BG_COLOR:%s]]", strings.ToUpper(hex)), nil
 }
 
-// ─── Extra template functions (registered by init) ─────────────────────────────
+// ─── Extra template functions ───────────────────────────────────────────────────
 
 const (
 	// HideRowSentinel is emitted by the hideRow template function; the
@@ -329,35 +344,6 @@ const (
 	// pageBreak post-processor.
 	PageBreakReplacement = `<w:r><w:br w:type="page"/></w:r>`
 )
-
-func init() {
-	validHighlightColor = make(map[string]struct{}, len(highlightColorNames))
-	for _, c := range highlightColorNames {
-		namedStyles[c] = styleEntry{
-			tag:    fmt.Sprintf(highlightWTagF, c),
-			dupKey: "<w:highlight w:val=",
-		}
-		validHighlightColor[c] = struct{}{}
-	}
-
-	for name, fn := range extraFuncMap {
-		TemplateFuncs[name] = fn
-	}
-}
-
-var extraFuncMap = map[string]any{
-	"formatNum":    formatNum,
-	"formatDate":   formatDate,
-	"formatDateRU": formatDateRU,
-	"hideRow":      hideRowFn,
-	"pageBreak":    pageBreakFn,
-	"default":      defaultVal,
-	"sumCol":       sumCol,
-	"avgCol":       avgCol,
-	"truncate":     truncate,
-	"romanNum":     romanNum,
-	"padRight":     padRight,
-}
 
 // formatNum formats a numeric value with thousands separator (non-breaking
 // space, U+00A0) and a configurable decimal separator.
@@ -620,4 +606,15 @@ var TemplateFuncs = template.FuncMap{
 	"replaceImage":     replaceImage,
 	"shapeBgFillColor": shapeBgFillColor,
 	"tableCellBgColor": tableCellBgColor,
+	"formatNum":        formatNum,
+	"formatDate":       formatDate,
+	"formatDateRU":     formatDateRU,
+	"hideRow":          hideRowFn,
+	"pageBreak":        pageBreakFn,
+	"default":          defaultVal,
+	"sumCol":           sumCol,
+	"avgCol":           avgCol,
+	"truncate":         truncate,
+	"romanNum":         romanNum,
+	"padRight":         padRight,
 }

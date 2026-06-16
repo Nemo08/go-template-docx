@@ -7,22 +7,20 @@ import (
 	"github.com/JJJJJJack/go-template-docx/internal/xml"
 )
 
-// DefaultPostProcessors holds the default XML post-processors that are
+// DefaultPostProcessors returns the default XML post-processors that are
 // applied to every rendered document (hideRow, pageBreak).
-var DefaultPostProcessors []xml.HandlersMap
-
-func init() {
-	DefaultPostProcessors = append(DefaultPostProcessors,
-		hideRowPostProcessor(),
-		pageBreakPostProcessor(),
-	)
-}
-
-func hideRowPostProcessor() xml.HandlersMap {
-	return xml.HandlersMap{
-		"word/document.xml": {func(s string) (string, error) {
-			return removeHiddenRows(s), nil
-		}},
+func DefaultPostProcessors() []xml.HandlersMap {
+	return []xml.HandlersMap{
+		{
+			"word/document.xml": {func(s string) (string, error) {
+				return removeHiddenRows(s), nil
+			}},
+		},
+		{
+			"word/document.xml": {func(s string) (string, error) {
+				return strings.ReplaceAll(s, PageBreakPlaceholder, PageBreakReplacement), nil
+			}},
+		},
 	}
 }
 
@@ -52,12 +50,4 @@ func removeHiddenRows(content string) string {
 		pos = end
 	}
 	return sb.String()
-}
-
-func pageBreakPostProcessor() xml.HandlersMap {
-	return xml.HandlersMap{
-		"word/document.xml": {func(s string) (string, error) {
-			return strings.ReplaceAll(s, PageBreakPlaceholder, PageBreakReplacement), nil
-		}},
-	}
 }

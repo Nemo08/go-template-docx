@@ -52,7 +52,7 @@ func TestRemoveHiddenRows_AllMarked(t *testing.T) {
 }
 
 func TestPageBreakPostProcessor(t *testing.T) {
-	m := pageBreakPostProcessor()
+	m := DefaultPostProcessors()[1]
 	handlers := m["word/document.xml"]
 	if len(handlers) == 0 {
 		t.Fatal("no handlers")

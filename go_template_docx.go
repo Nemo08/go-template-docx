@@ -81,8 +81,8 @@ func newDocxTemplate(inputBuffer bytes.Buffer, filename string, options ...Templ
 	cfg := defaultConfig()
 	cfg.Filename = filename
 	cfg.TemplateFuncs = copyTemplateFuncs(docx.TemplateFuncs)
-	cfg.PreProcessors = append([]xml.HandlersMap{}, docx.DefaultPreProcessors...)
-	cfg.PostProcessors = append([]xml.HandlersMap{}, docx.DefaultPostProcessors...)
+	cfg.PreProcessors = append([]xml.HandlersMap{}, docx.DefaultPreProcessors()...)
+	cfg.PostProcessors = append([]xml.HandlersMap{}, docx.DefaultPostProcessors()...)
 
 	for _, opt := range options {
 		opt(cfg)

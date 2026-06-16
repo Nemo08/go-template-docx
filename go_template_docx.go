@@ -534,9 +534,6 @@ func (p *TemplateProcessor) processChartFiles(zipWriter zio.ZipWriter, src zio.F
 
 // modifyXlsxInMemory modifies an XLSX byte slice in memory, applying templates.
 func (p *TemplateProcessor) modifyXlsxInMemory(xlsxName string, xlsxData []byte, templateValues any, ignoreMissingKey, deleteMissingKey bool) ([]byte, error) {
-	var sharedStringsNumbers map[int]string
-	var sharedStringsNewIndexes map[int]int
-
 	xlsxSrc, err := zio.NewFromBytes(xlsxData)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse XLSX zip: %w", err)
@@ -545,13 +542,7 @@ func (p *TemplateProcessor) modifyXlsxInMemory(xlsxName string, xlsxData []byte,
 	var buf bytes.Buffer
 	zipWriter := zio.NewZipWriter(&buf)
 
-	err = xlsxSrc.Each(func(name string) error {
-		if reSheetN.MatchString(name) || reSharedStringsN.MatchString(name) {
-			return nil
-		}
-		return zio.CopyToZip(zipWriter, xlsxSrc, name)
-	})
-	if err != nil {
+	if err := copyNonMatchingXlsxFiles(zipWriter, xlsxSrc); err != nil {
 		return nil, err
 	}
 
@@ -568,41 +559,14 @@ func (p *TemplateProcessor) modifyXlsxInMemory(xlsxName string, xlsxData []byte,
 		return nil, fmt.Errorf("error applying template to shared strings: %w", err)
 	}
 
-	sharedStringsContent, sharedStringsNumbers, sharedStringsNewIndexes, err = xlsx.GetReferencedSharedStringsByIndexAndCleanup(sharedStringsContent)
+	sharedStringsContent, sharedStringsNumbers, sharedStringsNewIndexes, err := xlsx.GetReferencedSharedStringsByIndexAndCleanup(sharedStringsContent)
 	if err != nil {
 		return nil, fmt.Errorf("error cleaning up shared strings: %w", err)
 	}
 
-	sharedStringsCount := uint(0)
-	for i := 1; ; i++ {
-		sheetN := fmt.Sprintf(docx.SheetPathFormat, i)
-
-		sheetContent, found, err := xlsxSrc.ReadFile(sheetN)
-		if err != nil {
-			return nil, fmt.Errorf("error reading sheet file '%s': %w", sheetN, err)
-		}
-		if !found {
-			break
-		}
-
-		var chartValues map[string]string
-		sheetContent, chartValues, err = xlsx.UpdateSheet(sheetContent, sharedStringsNumbers, sharedStringsNewIndexes)
-		if err != nil {
-			return nil, fmt.Errorf("error processing sheet '%s': %w", sheetN, err)
-		}
-
-		p.State.XlsxCharts[xlsxName] = chartValues
-
-		sharedStringsRefs, err := xlsx.GetCountFromXML(sheetContent)
-		if err != nil {
-			return nil, fmt.Errorf("error getting shared strings refs from sheet '%s': %w", sheetN, err)
-		}
-
-		sharedStringsCount += sharedStringsRefs
-
-		if err := zio.RewriteToZip(zipWriter, xlsxSrc, sheetN, sheetContent); err != nil {
-			return nil, fmt.Errorf("error writing sheet '%s': %w", sheetN, err)
-		}
+	sharedStringsCount, err := p.processXlsxSheets(zipWriter, xlsxSrc, sharedStringsNumbers, sharedStringsNewIndexes, xlsxName)
+	if err != nil {
+		return nil, err
 	}
 
 	sharedStringsContent, err = xlsx.UpdateSharedStringsCounts(sharedStringsContent, sharedStringsCount)
@@ -619,6 +583,51 @@ func (p *TemplateProcessor) modifyXlsxInMemory(xlsxName string, xlsxData []byte,
 	}
 
 	return buf.Bytes(), nil
+}
+
+func copyNonMatchingXlsxFiles(zipWriter zio.ZipWriter, xlsxSrc zio.FileSource) error {
+	return xlsxSrc.Each(func(name string) error {
+		if reSheetN.MatchString(name) || reSharedStringsN.MatchString(name) {
+			return nil
+		}
+		return zio.CopyToZip(zipWriter, xlsxSrc, name)
+	})
+}
+
+func (p *TemplateProcessor) processXlsxSheets(zipWriter zio.ZipWriter, xlsxSrc zio.FileSource, sharedStringsNumbers map[int]string, sharedStringsNewIndexes map[int]int, xlsxName string) (uint, error) {
+	var count uint
+	for i := 1; ; i++ {
+		sheetN := fmt.Sprintf(docx.SheetPathFormat, i)
+
+		sheetContent, found, err := xlsxSrc.ReadFile(sheetN)
+		if err != nil {
+			return 0, fmt.Errorf("error reading sheet file '%s': %w", sheetN, err)
+		}
+		if !found {
+			break
+		}
+
+		var chartValues map[string]string
+		sheetContent, chartValues, err = xlsx.UpdateSheet(sheetContent, sharedStringsNumbers, sharedStringsNewIndexes)
+		if err != nil {
+			return 0, fmt.Errorf("error processing sheet '%s': %w", sheetN, err)
+		}
+
+		p.State.XlsxCharts[xlsxName] = chartValues
+
+		refs, err := xlsx.GetCountFromXML(sheetContent)
+		if err != nil {
+			return 0, fmt.Errorf("error getting shared strings refs from sheet '%s': %w", sheetN, err)
+		}
+
+		count += refs
+
+		if err := zio.RewriteToZip(zipWriter, xlsxSrc, sheetN, sheetContent); err != nil {
+			return 0, fmt.Errorf("error writing sheet '%s': %w", sheetN, err)
+		}
+	}
+
+	return count, nil
 }
 
 // NewDocxTemplateFromBytes creates a new docxTemplate object from the provided DOCX file bytes.

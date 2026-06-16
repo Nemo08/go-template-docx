@@ -15,6 +15,7 @@ import (
 	"text/template"
 
 	"github.com/JJJJJJack/go-template-docx/internal/docx"
+	"github.com/JJJJJJack/go-template-docx/internal/docx/autoexpand"
 	"github.com/JJJJJJack/go-template-docx/internal/xlsx"
 	docxtemplate "github.com/JJJJJJack/go-template-docx/internal/template"
 	"github.com/JJJJJJack/go-template-docx/internal/xmlutil"
@@ -899,13 +900,13 @@ func SetMissingKeyLogger(logger *slog.Logger) TemplateOption {
 // Disabled by default.
 func WithAutoExpandRows(data any) RenderOption {
 	return func(t *docxTemplate) {
-		t.AddPreProcessors(docx.AutoExpandRowsPreProcessor(data))
+		t.AddPreProcessors(autoexpand.AutoExpandRowsPreProcessor(data))
 	}
 }
 
 // AutoExpandRows is the v1-style TemplateOption equivalent.
 func AutoExpandRows(data any) TemplateOption {
 	return func(c *TemplateConfig) {
-		c.PreProcessors = append(c.PreProcessors, docx.AutoExpandRowsPreProcessor(data))
+		c.PreProcessors = append(c.PreProcessors, autoexpand.AutoExpandRowsPreProcessor(data))
 	}
 }

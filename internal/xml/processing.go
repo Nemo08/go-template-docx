@@ -18,6 +18,33 @@ type Handler func(content string) (string, error)
 // The final output will overwrite the original.
 type HandlersMap map[string][]Handler
 
+// processFileWithHandlers reads a file from src, applies the handler chain,
+// and writes the result to outputZipWriter. If no handlers are provided, the
+// file is copied as-is.
+func processFileWithHandlers(outputZipWriter zio.ZipWriter, src zio.FileSource, filename string, processors []Handler, stage string) error {
+	if len(processors) == 0 {
+		return zio.CopyToZip(outputZipWriter, src, filename)
+	}
+
+	fileContent, found, err := src.ReadFile(filename)
+	if err != nil {
+		return fmt.Errorf("unable to read file '%s' during %s-processing: %w", filename, stage, err)
+	}
+	if !found {
+		return fmt.Errorf("file '%s' not found during %s-processing", filename, stage)
+	}
+
+	xmlOutput := string(fileContent)
+	for _, processor := range processors {
+		xmlOutput, err = processor(xmlOutput)
+		if err != nil {
+			return fmt.Errorf("error %s processing file '%s': %w", stage, filename, err)
+		}
+	}
+
+	return zio.RewriteToZip(outputZipWriter, src, filename, []byte(xmlOutput))
+}
+
 // ProcessedOutput applies pre/post-processor handlers to all files in a DOCX zip buffer.
 func ProcessedOutput(filesProcessorsMaps []HandlersMap, outputBuffer *bytes.Buffer, preOrPost string) error {
 	for _, filesPostProcessorsMap := range filesProcessorsMaps {
@@ -32,34 +59,7 @@ func ProcessedOutput(filesProcessorsMaps []HandlersMap, outputBuffer *bytes.Buff
 		outputZipWriter := zio.NewZipWriter(outputBuffer)
 
 		err = src.Each(func(filename string) error {
-			processors := filesPostProcessorsMap[filename]
-			if len(processors) == 0 {
-				if err := zio.CopyToZip(outputZipWriter, src, filename); err != nil {
-					return fmt.Errorf("unable to copy original file '%s' during %s-processing: %w", filename, preOrPost, err)
-				}
-				return nil
-			}
-
-			fileContent, found, err := src.ReadFile(filename)
-			if err != nil {
-				return fmt.Errorf("unable to read file '%s' during %s-processing: %w", filename, preOrPost, err)
-			}
-			if !found {
-				return fmt.Errorf("file '%s' not found during %s-processing", filename, preOrPost)
-			}
-
-			xmlOutput := string(fileContent)
-			for _, processor := range processors {
-				xmlOutput, err = processor(xmlOutput)
-				if err != nil {
-					return fmt.Errorf("error %s processing file '%s': %w", preOrPost, filename, err)
-				}
-			}
-
-			if err := zio.RewriteToZip(outputZipWriter, src, filename, []byte(xmlOutput)); err != nil {
-				return fmt.Errorf("unable to rewrite %s-processed file '%s': %w", preOrPost, filename, err)
-			}
-			return nil
+			return processFileWithHandlers(outputZipWriter, src, filename, filesPostProcessorsMap[filename], preOrPost)
 		})
 		if err != nil {
 			return err

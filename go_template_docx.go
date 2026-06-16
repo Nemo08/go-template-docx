@@ -313,50 +313,41 @@ func (p *TemplateProcessor) processXlsxFiles(zipWriter zio.ZipWriter, src zio.Fi
 	return nil
 }
 
+// processFileSequence applies templates to a numbered sequence of files
+// (e.g., headers or footers) and updates their relationship files.
+func (p *TemplateProcessor) processFileSequence(zipWriter zio.ZipWriter, src zio.FileSource, applyTemplate func(name string, content []byte, data any) ([]byte, []rels.MediaRel, error), templateValues any, warnDataMap map[string]any, nameFormat, relsFormat string) error {
+	for i := 1; ; i++ {
+		name := fmt.Sprintf(nameFormat, i)
+		data, found, err := src.ReadFile(name)
+		if err != nil {
+			return fmt.Errorf("unable to read file '%s': %w", name, err)
+		}
+		if !found {
+			break
+		}
+		p.warnMissingKeysForFile(name, src, warnDataMap)
+		output, media, err := applyTemplate(name, data, templateValues)
+		if err != nil {
+			return fmt.Errorf("unable to apply template to file '%s': %w", name, err)
+		}
+		if err := p.updateFileRels(zipWriter, src, fmt.Sprintf(relsFormat, i), media); err != nil {
+			return fmt.Errorf("unable to update rels for '%s': %w", name, err)
+		}
+		if err := zio.RewriteToZip(zipWriter, src, name, output); err != nil {
+			return fmt.Errorf("unable to write file '%s': %w", name, err)
+		}
+	}
+	return nil
+}
+
 // processHeadersFootersDocument applies templates to header, footer, and main document files.
 // Header and footer image rels are written to their own .rels files; document rels go to State.RelMedia.
 func (p *TemplateProcessor) processHeadersFootersDocument(zipWriter zio.ZipWriter, src zio.FileSource, applyTemplate func(name string, content []byte, data any) ([]byte, []rels.MediaRel, error), templateValues any, warnDataMap map[string]any) error {
-	for i := 1; ; i++ {
-		headerName := fmt.Sprintf(docx.HeaderPathFormat, i)
-		data, found, err := src.ReadFile(headerName)
-		if err != nil {
-			return fmt.Errorf("unable to read header file '%s': %w", headerName, err)
-		}
-		if !found {
-			break
-		}
-		p.warnMissingKeysForFile(headerName, src, warnDataMap)
-		output, media, err := applyTemplate(headerName, data, templateValues)
-		if err != nil {
-			return fmt.Errorf("unable to apply template to header file '%s': %w", headerName, err)
-		}
-		if err := p.updateFileRels(zipWriter, src, fmt.Sprintf(docx.HeaderRelsPathFormat, i), media); err != nil {
-			return fmt.Errorf("unable to update header rels for '%s': %w", headerName, err)
-		}
-		if err := zio.RewriteToZip(zipWriter, src, headerName, output); err != nil {
-			return fmt.Errorf("unable to write header file '%s': %w", headerName, err)
-		}
+	if err := p.processFileSequence(zipWriter, src, applyTemplate, templateValues, warnDataMap, docx.HeaderPathFormat, docx.HeaderRelsPathFormat); err != nil {
+		return err
 	}
-	for i := 1; ; i++ {
-		footerName := fmt.Sprintf(docx.FooterPathFormat, i)
-		data, found, err := src.ReadFile(footerName)
-		if err != nil {
-			return fmt.Errorf("unable to read footer file '%s': %w", footerName, err)
-		}
-		if !found {
-			break
-		}
-		p.warnMissingKeysForFile(footerName, src, warnDataMap)
-		output, media, err := applyTemplate(footerName, data, templateValues)
-		if err != nil {
-			return fmt.Errorf("unable to apply template to footer file '%s': %w", footerName, err)
-		}
-		if err := p.updateFileRels(zipWriter, src, fmt.Sprintf(docx.FooterRelsPathFormat, i), media); err != nil {
-			return fmt.Errorf("unable to update footer rels for '%s': %w", footerName, err)
-		}
-		if err := zio.RewriteToZip(zipWriter, src, footerName, output); err != nil {
-			return fmt.Errorf("unable to write footer file '%s': %w", footerName, err)
-		}
+	if err := p.processFileSequence(zipWriter, src, applyTemplate, templateValues, warnDataMap, docx.FooterPathFormat, docx.FooterRelsPathFormat); err != nil {
+		return err
 	}
 	documentData, found, err := src.ReadFile(docx.DocumentXMLPath)
 	if err != nil {

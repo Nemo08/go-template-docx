@@ -17,6 +17,7 @@ import (
 	"github.com/JJJJJJack/go-template-docx/internal/docx"
 	"github.com/JJJJJJack/go-template-docx/internal/docx/autoexpand"
 	"github.com/JJJJJJack/go-template-docx/internal/docx/images"
+	"github.com/JJJJJJack/go-template-docx/internal/docx/media"
 	"github.com/JJJJJJack/go-template-docx/internal/docx/rels"
 	"github.com/JJJJJJack/go-template-docx/internal/xlsx"
 	docxtemplate "github.com/JJJJJJack/go-template-docx/internal/template"
@@ -61,7 +62,7 @@ type TemplateState struct {
 	Output     bytes.Buffer
 	Rel        *rels.Relationship
 	RelMedia   []rels.MediaRel
-	Media      docx.MediaMap
+	Media      media.MediaMap
 	XlsxCharts xlsxChartsMap
 }
 
@@ -96,7 +97,7 @@ func newDocxTemplate(inputBuffer bytes.Buffer, filename string, options ...Templ
 		State: TemplateState{
 			Input:      inputBuffer,
 			Output:     bytes.Buffer{},
-			Media:      make(docx.MediaMap),
+			Media:      make(media.MediaMap),
 			Rel:        &rels.Relationship{},
 			RelMedia:   []rels.MediaRel{},
 			XlsxCharts: make(xlsxChartsMap),
@@ -670,7 +671,7 @@ func NewDocxTemplateFromFilename(docxFilename string, options ...TemplateOption)
 func (dt *docxTemplate) Media(filename string, data []byte) {
 	filename = filepath.Base(filename)
 
-	dt.State.Media[filename] = &docx.Media{
+	dt.State.Media[filename] = &media.Media{
 		Data: data,
 	}
 }

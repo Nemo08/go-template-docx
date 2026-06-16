@@ -12,3 +12,10 @@ makefile
 internal/mydebug/
 AGENTS.md
 coverage.out
+cov
+cov.profile
+*.test
+*.prof
+build/
+.vscode/
+.gograph/

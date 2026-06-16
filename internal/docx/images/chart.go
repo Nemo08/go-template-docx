@@ -50,7 +50,7 @@ func UpdateChart(fileContent []byte, cellAndValues map[string]string) ([]byte, e
 		})
 
 		// Put updated cache back
-		return []byte(strings.Replace(string(block), cache, cacheUpdated, 1))
+		return bytes.Replace(block, []byte(cache), []byte(cacheUpdated), 1)
 	})
 
 	return updated, nil

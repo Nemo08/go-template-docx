@@ -57,14 +57,9 @@ func replaceEmptyTags(data []byte) []byte {
 func (ct *contentTypes) ToXML() ([]byte, error) {
 	output, err := xml.MarshalIndent(ct, "", "  ")
 	if err != nil {
-		return []byte{}, err
+		return nil, err
 	}
 
 	output = replaceEmptyTags(output)
-
-	xmlBytes := make([]byte, 0, len(rels.XMLStdHeader)+len(output))
-	xmlBytes = append(xmlBytes, rels.XMLStdHeader...)
-	xmlBytes = append(xmlBytes, output...)
-
-	return xmlBytes, nil
+	return rels.WithXMLHeader(output), nil
 }

@@ -1,11 +1,11 @@
-package docx
+package media
 
 import (
 	"bytes"
 	"fmt"
 	stdimage "image"
-	_ "image/jpeg" // register JPEG decoder for image.Decode
-	_ "image/png"  // register PNG decoder for image.Decode
+	_ "image/jpeg"
+	_ "image/png"
 	"math"
 )
 
@@ -21,7 +21,7 @@ type Media struct {
 
 type MediaMap map[string]*Media
 
-func (d *documentMeta) computeDocxImageSize(imageData []byte) (int, int, error) {
+func ComputeImageSize(imageData []byte, maxWidthInches, maxHeightInches float64) (int, int, error) {
 	cfg, _, err := stdimage.DecodeConfig(bytes.NewReader(imageData))
 	if err != nil {
 		return 0, 0, err
@@ -34,7 +34,7 @@ func (d *documentMeta) computeDocxImageSize(imageData []byte) (int, int, error) 
 	widthInches := float64(cfg.Width) / defaultDPI
 	heightInches := float64(cfg.Height) / defaultDPI
 
-	scale := math.Min(d.maxWidthInches/widthInches, d.maxHeightInches/heightInches)
+	scale := math.Min(maxWidthInches/widthInches, maxHeightInches/heightInches)
 	if scale > 1 {
 		scale = 1
 	}

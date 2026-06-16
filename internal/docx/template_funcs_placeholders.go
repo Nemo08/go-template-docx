@@ -9,10 +9,14 @@ import (
 	"strings"
 	"text/template"
 
+	"github.com/JJJJJJack/go-template-docx/internal/docx/media"
 	"github.com/JJJJJJack/go-template-docx/internal/docx/rels"
 )
 
-var reImagePlaceholder = regexp.MustCompile(`\[\[IMAGE:.*?\]\]`)
+var (
+	reImagePlaceholder = regexp.MustCompile(`\[\[IMAGE:.*?\]\]`)
+	imageTemplate      = template.Must(template.New("image-template").Parse(imageTemplateXML))
+)
 
 func (d *documentMeta) applyImages(srcXML string) (string, []rels.MediaRel, error) {
 	mediaRels := []rels.MediaRel{}
@@ -31,17 +35,12 @@ func (d *documentMeta) applyImages(srcXML string) (string, []rels.MediaRel, erro
 		rid := d.NextRId()
 		rID := fmt.Sprintf("rID%d", rid)
 
-		imageTemplate, err := template.New("image-template").Parse(imageTemplateXML)
-		if err != nil {
-			return srcXML, mediaRels, err
-		}
-
 		v, ok := d.mediaMap[filename]
 		if !ok {
 			return srcXML, mediaRels, fmt.Errorf("filename '%s' not found in loaded medias", filename)
 		}
 
-		cx, cy, err := d.computeDocxImageSize(v.Data)
+		cx, cy, err := media.ComputeImageSize(v.Data, d.maxWidthInches, d.maxHeightInches)
 		if err != nil {
 			return srcXML, mediaRels, fmt.Errorf("unable to compute image size for '%s': %w", filename, err)
 		}

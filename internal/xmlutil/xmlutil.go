@@ -59,7 +59,7 @@ func PatchXML(srcXML string) string {
 			"&#38;", "&",
 		).Replace(templateText)
 
-		srcXML = strings.ReplaceAll(srcXML, match, templateText)
+		srcXML = strings.Replace(srcXML, match, templateText, 1)
 	}
 
 	srcXML = reBareHexArg1.ReplaceAllString(srcXML, `{{shapeBgFillColor "$1"}}`)

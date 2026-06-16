@@ -8,7 +8,7 @@ import (
 	"testing"
 	"text/template"
 
-	"github.com/JJJJJJack/go-template-docx/internal/docx"
+	"github.com/JJJJJJack/go-template-docx/internal/docx/media"
 	"github.com/JJJJJJack/go-template-docx/internal/zio"
 	"github.com/JJJJJJack/go-template-docx/internal/xml"
 )
@@ -136,7 +136,7 @@ func TestWithFuncs_SetsFuncMap(t *testing.T) {
 }
 
 func TestWithImage_SetsMedia(t *testing.T) {
-	tpl := &docxTemplate{State: TemplateState{Media: make(docx.MediaMap)}}
+	tpl := &docxTemplate{State: TemplateState{Media: make(media.MediaMap)}}
 	WithImage("test.png", []byte("data"))(tpl)
 	if len(tpl.State.Media) != 1 {
 		t.Errorf("expected 1 media, got %d", len(tpl.State.Media))

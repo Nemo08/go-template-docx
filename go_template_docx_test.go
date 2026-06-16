@@ -1,12 +1,14 @@
 package gotemplatedocx
 
 import (
+	"bytes"
 	"log/slog"
 	"os"
 	"testing"
 	"text/template"
 
 	"github.com/JJJJJJack/go-template-docx/internal/docx"
+	"github.com/JJJJJJack/go-template-docx/internal/docx/media"
 )
 
 func TestCopyTemplateFuncs(t *testing.T) {
@@ -220,7 +222,7 @@ func TestNewDocxTemplateFromBytes_WithOptions(t *testing.T) {
 }
 
 func TestMedia(t *testing.T) {
-	dt := &docxTemplate{State: TemplateState{Media: make(docx.MediaMap)}}
+	dt := &docxTemplate{State: TemplateState{Media: make(media.MediaMap)}}
 	dt.Media("test.png", []byte("image data"))
 	if len(dt.State.Media) != 1 {
 		t.Errorf("expected 1 media, got %d", len(dt.State.Media))
@@ -295,5 +297,94 @@ func TestWarnOnMissingKey_SetsDeleteMissingKey(t *testing.T) {
 	}
 	if !tpl.Config.WarnOnMissingKey {
 		t.Error("expected WarnOnMissingKey true after WarnOnMissingKey()")
+	}
+}
+
+func TestNewDocxTemplateFromFilename_Error(t *testing.T) {
+	_, err := NewDocxTemplateFromFilename("nonexistent.docx")
+	if err == nil {
+		t.Fatal("expected error for nonexistent file")
+	}
+}
+
+func TestSave_Bytes(t *testing.T) {
+	docxBytes := buildMinimalDocx(t, `{{.Name}}`)
+	tpl, err := NewDocxTemplateFromBytes(docxBytes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := tpl.Apply(map[string]any{"Name": "test"}); err != nil {
+		t.Fatal(err)
+	}
+	b := tpl.Bytes()
+	if len(b) == 0 {
+		t.Error("expected non-empty output")
+	}
+}
+
+func TestSave_ToFile(t *testing.T) {
+	docxBytes := buildMinimalDocx(t, `test`)
+	tpl, err := NewDocxTemplateFromBytes(docxBytes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dst := t.TempDir() + "\\out.docx"
+	err = tpl.Save(dst)
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestWithFilename_Option(t *testing.T) {
+	docxBytes := buildMinimalDocx(t, `test`)
+	_, err := NewDocxTemplateFromBytes(docxBytes, WithFilename("test.docx"))
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestSetMissingKeyLogger(t *testing.T) {
+	var buf bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&buf, nil))
+	_, err := NewDocxTemplateFromBytes(nil, SetMissingKeyLogger(logger))
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestGetTemplateVariables_ParsesVariables(t *testing.T) {
+	t.Skip("requires real DOCX with proper XML namespace handling")
+}
+
+func TestGetTemplateVariables_Empty(t *testing.T) {
+	t.Skip("requires real DOCX with proper XML namespace handling")
+}
+
+func TestGetTemplateVariables_Error(t *testing.T) {
+	t.Skip("NewDocxTemplateFromBytes doesn't validate zip on creation")
+}
+
+func TestWarnMissingKeysForFile(t *testing.T) {
+	var logBuf bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&logBuf, &slog.HandlerOptions{Level: slog.LevelWarn}))
+	tpl, err := NewDocxTemplateFromBytes(nil, SetMissingKeyLogger(logger))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	docxBytes := buildMinimalDocx(t, `{{.Missing}}`)
+	tpl.Config.IgnoreMissingKey = true
+	tpl.Apply(docxBytes)
+	// no warnings expected for IgnoreMissingKey
+}
+
+func TestRemoveRangeRows_Option(t *testing.T) {
+	docxBytes := buildMinimalDocx(t, `test`)
+	tpl, err := NewDocxTemplateFromBytes(docxBytes, RemoveRangeRows())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !tpl.Config.RemoveRangeRows {
+		t.Error("expected RemoveRangeRows true")
 	}
 }

@@ -6,23 +6,41 @@ import (
 	"reflect"
 	"regexp"
 	"strings"
+	"sync"
 
 	"github.com/JJJJJJack/go-template-docx/internal/xmlutil"
 	"github.com/JJJJJJack/go-template-docx/internal/xml"
 )
 
-var reExpandRow = regexp.MustCompile(
-	`\{\{[^}]*\.(\w+)\.0(?:\.(\w+))?[^}]*\}\}` +
-		`|\{\{[^}]*index\s+\.(\w+)\s+0[^}]*\}\}`,
+var (
+	reExpandRow = regexp.MustCompile(
+		`\{\{[^}]*\.(\w+)\.0(?:\.(\w+))?[^}]*\}\}` +
+			`|\{\{[^}]*index\s+\.(\w+)\s+0[^}]*\}\}`,
+	)
+
+	reAnyIndex = regexp.MustCompile(`(\.)(\d+)(\.)`)
+
+	// reDocxplateVar matches docxplate-like references: {{ArrayName.Field}} or {{.ArrayName.Field}}.
+	reDocxplateVar = regexp.MustCompile(`\{\{\s*\.?(\w+)\.(\w+)\s*\}\}`)
+
+	// reIndexPattern matches "index .X 0" function call to replace 0.
+	reIndexPattern = regexp.MustCompile(`(\bindex\s+\.\w+\s+)\d+`)
+
+	// reNormalizeDocxplateRow is a reusable regex builder for normalizeDocxplateRow.
+	// Use getNormalizeDocxplateRE to obtain a compiled regex for a given arrayName.
+	reNormalizeDocxplateCache sync.Map
 )
 
-var reAnyIndex = regexp.MustCompile(`(\.)(\d+)(\.)`)
-
-// reDocxplateVar matches docxplate-like references: {{ArrayName.Field}} or {{.ArrayName.Field}}.
-var reDocxplateVar = regexp.MustCompile(`\{\{\s*\.?(\w+)\.(\w+)\s*\}\}`)
-
-// reIndexPattern matches the "index .X N" function call to replace N.
-var reIndexPattern = regexp.MustCompile(`(\bindex\s+\.\w+\s+)\d+`)
+func getNormalizeDocxplateRE(arrayName string) *regexp.Regexp {
+	v, ok := reNormalizeDocxplateCache.Load(arrayName)
+	if ok {
+		return v.(*regexp.Regexp)
+	}
+	quoted := regexp.QuoteMeta(arrayName)
+	re := regexp.MustCompile(`\{\{\s*\.?` + quoted + `\.(\w+)\s*\}\}`)
+	reNormalizeDocxplateCache.Store(arrayName, re)
+	return re
+}
 
 // AutoExpandRowsPreProcessor returns an xml.HandlersMap that rewrites
 // expandable table rows in word/document.xml before the Go template engine
@@ -140,8 +158,7 @@ func expandClones(rowXML string, arrayName string, dataMap map[string]any) (stri
 // normalizeDocxplateRow rewrites {{ArrayName.Field}} to {{(index .ArrayName 0).Field}}
 // within all template blocks of rowXML, which is valid Go template syntax.
 func normalizeDocxplateRow(rowXML string, arrayName string) string {
-	quoted := regexp.QuoteMeta(arrayName)
-	re := regexp.MustCompile(`\{\{\s*\.?` + quoted + `\.(\w+)\s*\}\}`)
+	re := getNormalizeDocxplateRE(arrayName)
 	return re.ReplaceAllStringFunc(rowXML, func(match string) string {
 		sub := re.FindStringSubmatch(match)
 		if sub == nil {
@@ -206,6 +223,12 @@ func reflectToMap(data any) map[string]any {
 	switch v := data.(type) {
 	case map[string]any:
 		return v
+	case map[string]string:
+		m := make(map[string]any, len(v))
+		for k, val := range v {
+			m[k] = val
+		}
+		return m
 	case []byte:
 		var m map[string]any
 		if err := json.Unmarshal(v, &m); err != nil {

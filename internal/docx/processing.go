@@ -15,6 +15,7 @@ var (
 	reXMLSpace      = regexp.MustCompile(`xml:space="preserve"`)
 	reTextElement   = regexp.MustCompile(`<w:t\b([^>]*)>([\s\S]*?)</w:t>`)
 	reNestedRun     = regexp.MustCompile(`(?is)<w:t\b([^>]*)>\s*(<w:rPr>[\s\S]*?</w:rPr>)\s*<w:t\b([^>]*)>([\s\S]*?)</w:t>\s*</w:t>`)
+	rePropagateRunProps = regexp.MustCompile(`(<w:rPr>[^<]*(?:<[^>]+/>[^<]*)*</w:rPr>)(<w:t[^>]*>[^<]*</w:t></w:r></w:p><w:p><w:r>)<w:t`)
 	// Директивы Go-шаблона, строки с которыми должны удаляться после рендеринга.
 	// Проверяем текстовое содержимое ячеек (внутри <w:t>), а не весь XML строки —
 	// так надёжнее после PatchXml, который уже убрал XML-теги из выражений {{ }}.
@@ -94,9 +95,8 @@ func removeMarkedEmptyRows(srcXML string) string {
 // propagateRunPropsAfterBreak ensures that <w:r> elements created by breakParagraph
 // inherit the <w:rPr> from the originating run.
 func propagateRunPropsAfterBreak(srcXML string) string {
-	re := regexp.MustCompile(`(<w:rPr>[^<]*(?:<[^>]+/>[^<]*)*</w:rPr>)(<w:t[^>]*>[^<]*</w:t></w:r></w:p><w:p><w:r>)<w:t`)
 	for {
-		next := re.ReplaceAllString(srcXML, `${1}${2}${1}<w:t`)
+		next := rePropagateRunProps.ReplaceAllString(srcXML, `${1}${2}${1}<w:t`)
 		if next == srcXML {
 			break
 		}

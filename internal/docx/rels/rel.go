@@ -45,18 +45,22 @@ func (r *Relationship) addRelationship(relType, target, id string) {
 	r.Relationships = append(r.Relationships, newRel)
 }
 
+// WithXMLHeader prepends the standard XML header to marshalled XML bytes.
+func WithXMLHeader(xmlBytes []byte) []byte {
+	b := make([]byte, 0, len(XMLStdHeader)+len(xmlBytes))
+	b = append(b, XMLStdHeader...)
+	b = append(b, xmlBytes...)
+	return b
+}
+
 // ToXML serializes the relationship list back to XML bytes.
 func (r *Relationship) ToXML() ([]byte, error) {
 	output, err := xml.MarshalIndent(r, "", "  ")
 	if err != nil {
-		return []byte{}, err
+		return nil, err
 	}
 
-	xmlBytes := make([]byte, 0, len(XMLStdHeader)+len(output))
-	xmlBytes = append(xmlBytes, XMLStdHeader...)
-	xmlBytes = append(xmlBytes, output...)
-
-	return xmlBytes, nil
+	return WithXMLHeader(output), nil
 }
 
 // ParseRelationship parses a .rels XML byte slice into a Relationship struct.

@@ -9,6 +9,7 @@ import (
 	"strings"
 	"text/template"
 
+	"github.com/JJJJJJack/go-template-docx/internal/docx/media"
 	"github.com/JJJJJJack/go-template-docx/internal/docx/rels"
 	"github.com/JJJJJJack/go-template-docx/internal/zio"
 )
@@ -17,7 +18,7 @@ import (
 type DocumentProcessor interface {
 	ApplyTemplate(name string, content []byte, data any) (output []byte, media []rels.MediaRel, err error)
 	NextImageNumber() uint64
-	SetMediaMap(mm MediaMap)
+	SetMediaMap(mm media.MediaMap)
 	SetRemoveEmptyTableRows(v bool)
 	SetRemoveRangeRows(v bool)
 	SetIgnoreMissingKey(v bool)
@@ -29,7 +30,7 @@ type documentConfig struct {
 	maxWidthInches    float64
 	maxHeightInches   float64
 	templateFuncs     template.FuncMap
-	mediaMap          MediaMap
+	mediaMap          media.MediaMap
 	RemoveEmptyTableRows bool
 	RemoveRangeRows      bool
 	IgnoreMissingKey     bool
@@ -112,7 +113,7 @@ func (d *documentMeta) NextRId() uint64 {
 	return d.greaterRId
 }
 
-func (d *documentMeta) SetMediaMap(mm MediaMap) {
+func (d *documentMeta) SetMediaMap(mm media.MediaMap) {
 	d.mediaMap = mm
 }
 

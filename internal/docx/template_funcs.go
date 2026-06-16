@@ -147,67 +147,81 @@ func list(args ...interface{}) []interface{} {
 
 // formatStylesTags takes a slice of styles and returns the corresponding XML tags.
 func formatStylesTags(stylesList []interface{}, funcName string) (string, error) {
-	styles := ""
+	var styles strings.Builder
 	for _, arg := range stylesList {
 		styleParam, ok := arg.(string)
 		if !ok {
 			return "", fmt.Errorf("%s got non-string style parameter: %v", funcName, arg)
 		}
 
-		// font size style
-		if strings.HasPrefix(styleParam, fontSizeStylePrefix) || strings.HasPrefix(styleParam, fontSizeStylePrefixShort) {
-			if strings.Contains(styles, "<w:sz w:val=") {
-				return "", fmt.Errorf("%s got multiple font size styles", funcName)
-			}
-
-			sizeStr := strings.TrimPrefix(styleParam, fontSizeStylePrefix)
-			sizeStr = strings.TrimPrefix(sizeStr, fontSizeStylePrefixShort)
-
-			ptSize, err := strconv.Atoi(sizeStr)
-			if err != nil {
-				return "", fmt.Errorf("%s got invalid size: %s", funcName, sizeStr)
-			}
-
-			styles += fontSizeWrapperf(ptSize)
-			continue
+		tag, err := dispatchStyleTag(styleParam, funcName, styles.String())
+		if err != nil {
+			return "", err
 		}
-
-		// color style
-		if strings.HasPrefix(styleParam, "#") {
-			if strings.Contains(styles, "<w:color w:val=") {
-				return "", fmt.Errorf("%s got multiple color styles", funcName)
-			}
-
-			hex := strings.ToUpper(strings.TrimPrefix(styleParam, "#"))
-
-			styles += fmt.Sprintf(colorWTagF, hex)
-			continue
-		}
-
-		// shading style
-		if strings.HasPrefix(styleParam, textShadingStylePrefix) {
-			if strings.Contains(styles, "<w:shd w:val=") {
-				return "", fmt.Errorf("%s got multiple background shading styles", funcName)
-			}
-
-			hex := strings.ToUpper(strings.TrimPrefix(styleParam, textShadingStylePrefix))
-			hex = strings.TrimPrefix(hex, "#")
-
-			styles += fmt.Sprintf(shadingWTagF, hex)
-			continue
-		}
-
-		entry, ok := namedStyles[styleParam]
-		if !ok {
-			return "", fmt.Errorf("%s got unknown style: %s", funcName, styleParam)
-		}
-		if strings.Contains(styles, entry.dupKey) {
-			return "", fmt.Errorf("%s got multiple %s styles", funcName, styleParam)
-		}
-		styles += entry.tag
+		styles.WriteString(tag)
 	}
 
-	return styles, nil
+	return styles.String(), nil
+}
+
+func dispatchStyleTag(styleParam, funcName, existing string) (string, error) {
+	if strings.HasPrefix(styleParam, fontSizeStylePrefix) || strings.HasPrefix(styleParam, fontSizeStylePrefixShort) {
+		return parseFontSizeStyle(styleParam, funcName, existing)
+	}
+	if strings.HasPrefix(styleParam, "#") {
+		return parseColorStyle(styleParam, funcName, existing)
+	}
+	if strings.HasPrefix(styleParam, textShadingStylePrefix) {
+		return parseShadingStyle(styleParam, funcName, existing)
+	}
+	return parseNamedStyle(styleParam, funcName, existing)
+}
+
+func parseFontSizeStyle(styleParam, funcName, existing string) (string, error) {
+	if strings.Contains(existing, "<w:sz w:val=") {
+		return "", fmt.Errorf("%s got multiple font size styles", funcName)
+	}
+
+	sizeStr := strings.TrimPrefix(styleParam, fontSizeStylePrefix)
+	sizeStr = strings.TrimPrefix(sizeStr, fontSizeStylePrefixShort)
+
+	ptSize, err := strconv.Atoi(sizeStr)
+	if err != nil {
+		return "", fmt.Errorf("%s got invalid size: %s", funcName, sizeStr)
+	}
+
+	return fontSizeWrapperf(ptSize), nil
+}
+
+func parseColorStyle(styleParam, funcName, existing string) (string, error) {
+	if strings.Contains(existing, "<w:color w:val=") {
+		return "", fmt.Errorf("%s got multiple color styles", funcName)
+	}
+
+	hex := strings.ToUpper(strings.TrimPrefix(styleParam, "#"))
+	return fmt.Sprintf(colorWTagF, hex), nil
+}
+
+func parseShadingStyle(styleParam, funcName, existing string) (string, error) {
+	if strings.Contains(existing, "<w:shd w:val=") {
+		return "", fmt.Errorf("%s got multiple background shading styles", funcName)
+	}
+
+	hex := strings.ToUpper(strings.TrimPrefix(styleParam, textShadingStylePrefix))
+	hex = strings.TrimPrefix(hex, "#")
+
+	return fmt.Sprintf(shadingWTagF, hex), nil
+}
+
+func parseNamedStyle(styleParam, funcName, existing string) (string, error) {
+	entry, ok := namedStyles[styleParam]
+	if !ok {
+		return "", fmt.Errorf("%s got unknown style: %s", funcName, styleParam)
+	}
+	if strings.Contains(existing, entry.dupKey) {
+		return "", fmt.Errorf("%s got multiple %s styles", funcName, styleParam)
+	}
+	return entry.tag, nil
 }
 
 // styledText takes a strings and a slice of styles to apply to the text.

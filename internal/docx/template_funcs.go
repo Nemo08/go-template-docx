@@ -227,102 +227,104 @@ func parseNamedStyle(styleParam, funcName, existing string) (string, error) {
 // styledText takes a strings and a slice of styles to apply to the text.
 // You can use this function to style text with a set variable containing
 // a reusable style in your code.
-func styledText(text string, styles []interface{}) (string, error) {
+func styledText(text any, styles []interface{}) (string, error) {
 	stylesTags, err := formatStylesTags(styles, "styledText")
 	if err != nil {
 		return "", err
 	}
 
-	return fmt.Sprintf(styleWrapperF, stylesTags, text), nil
+	return fmt.Sprintf(styleWrapperF, stylesTags, fmt.Sprint(text)), nil
 }
 
 // inlineStyledText applies multiple styles to the given text.
 // The first argument is the text, the following arguments are styles.
 // You can use this function to apply multiple styles to a text without
 // having to wrap them in a list.
-func inlineStyledText(text string, styles ...interface{}) (string, error) {
+func inlineStyledText(text any, styles ...interface{}) (string, error) {
 	stylesTags, err := formatStylesTags(styles, "inlineStyledText")
 	if err != nil {
 		return "", err
 	}
 
-	return fmt.Sprintf(styleWrapperF, stylesTags, text), nil
+	return fmt.Sprintf(styleWrapperF, stylesTags, fmt.Sprint(text)), nil
 }
 
 // bold makes the text bold
-func bold(s string) string {
-	return fmt.Sprintf(boldWrapperF, s)
+func bold(s any) string {
+	return fmt.Sprintf(boldWrapperF, fmt.Sprint(s))
 }
 
 // italic makes the text italic
-func italic(s string) string {
-	return fmt.Sprintf(italicWrapperF, s)
+func italic(s any) string {
+	return fmt.Sprintf(italicWrapperF, fmt.Sprint(s))
 }
 
 // underline underlines the text
-func underline(s string) string {
-	return fmt.Sprintf(underlineWrapperF, s)
+func underline(s any) string {
+	return fmt.Sprintf(underlineWrapperF, fmt.Sprint(s))
 }
 
 // strike applies strikethrough to the text
-func strike(s string) string {
-	return fmt.Sprintf(strikethroughWrapperF, s)
+func strike(s any) string {
+	return fmt.Sprintf(strikethroughWrapperF, fmt.Sprint(s))
 }
 
 // fontSize sets the font size of the text
-func fontSize(s string, size int) string {
-	return fmt.Sprintf(styleWrapperF, fontSizeWrapperf(size), s)
+func fontSize(s any, size int) string {
+	return fmt.Sprintf(styleWrapperF, fontSizeWrapperf(size), fmt.Sprint(s))
 }
 
 // color sets the font color of the text
-func color(s, hex string) (string, error) {
+func color(s any, hex string) (string, error) {
 	hex = strings.TrimPrefix(hex, "#")
 	if len(hex) != 6 {
 		return "", fmt.Errorf("func 'color': invalid hex color value: %s (must be 6 characters like '0077FF')", hex)
 	}
 
-	return fmt.Sprintf(colorWrapperF, strings.ToUpper(hex), s), nil
+	return fmt.Sprintf(colorWrapperF, strings.ToUpper(hex), fmt.Sprint(s)), nil
 }
 
 // highlight applies a highlight color to the text
-func highlight(s, color string) (string, error) {
+func highlight(s any, color string) (string, error) {
 	if _, ok := validHighlightColor[color]; !ok {
 		return "", fmt.Errorf("func 'highlight': invalid highlight color value: %s", color)
 	}
 
-	return fmt.Sprintf(highlightWrapperF, color, s), nil
+	return fmt.Sprintf(highlightWrapperF, color, fmt.Sprint(s)), nil
 }
 
 // shadeTextBg applies a background color to the given text
-func shadeTextBg(s, hex string) (string, error) {
+func shadeTextBg(s any, hex string) (string, error) {
 	hex = strings.TrimPrefix(hex, "#")
 	if len(hex) != 6 {
 		return "", fmt.Errorf("func 'shadeTextBg': invalid hex color value: %s (must be 6 characters like '0077FF')", hex)
 	}
 
-	return fmt.Sprintf(shadingWrapperF, strings.ToUpper(hex), s), nil
+	return fmt.Sprintf(shadingWrapperF, strings.ToUpper(hex), fmt.Sprint(s)), nil
 }
 
 // image wraps a placeholder around the given filename for image insertion in the document.
-func image(filename string) string {
-	return fmt.Sprintf("[[IMAGE:%s]]", filename)
+func image(filename any) string {
+	s := fmt.Sprint(filename)
+	return fmt.Sprintf("[[IMAGE:%s]]", s)
 }
 
 // replaceImage insert a placeholder around the given filename for image replacement in the document.
-func replaceImage(filename string) string {
-	return fmt.Sprintf("[[REPLACE_IMAGE:%s]]", filename)
+func replaceImage(filename any) string {
+	s := fmt.Sprint(filename)
+	return fmt.Sprintf("[[REPLACE_IMAGE:%s]]", s)
 }
 
 // preserveNewline newlines are treated as `SHIFT + ENTER` input,
 // thus keeping the text in the same paragraph.
-func preserveNewline(text string) string {
-	return strings.ReplaceAll(text, "\n", docxNewlineInject)
+func preserveNewline(text any) string {
+	return strings.ReplaceAll(fmt.Sprint(text), "\n", docxNewlineInject)
 }
 
 // breakParagraph newlines are treated as `ENTER` input,
 // thus creating a new paragraph for the sequent line.
-func breakParagraph(text string) string {
-	return strings.ReplaceAll(text, "\n", docxBreakParagraphInject)
+func breakParagraph(text any) string {
+	return strings.ReplaceAll(fmt.Sprint(text), "\n", docxBreakParagraphInject)
 }
 
 // shapeBgFillColor replace fillcolor to shapes
@@ -557,10 +559,11 @@ func aggregateCol(slice any, field string, avg bool) (float64, error) {
 }
 
 // truncate cuts s to at most maxRunes runes, appending "…" if truncated.
-func truncate(s string, maxRunes int) string {
-	runes := []rune(s)
+func truncate(s any, maxRunes int) string {
+	ss := fmt.Sprint(s)
+	runes := []rune(ss)
 	if len(runes) <= maxRunes {
-		return s
+		return ss
 	}
 	if maxRunes <= 0 {
 		return ""
@@ -593,12 +596,13 @@ func romanNum(n int) (string, error) {
 }
 
 // padRight pads s with spaces on the right to minLen runes.
-func padRight(s string, minLen int) string {
-	n := utf8.RuneCountInString(s)
+func padRight(s any, minLen int) string {
+	ss := fmt.Sprint(s)
+	n := utf8.RuneCountInString(ss)
 	if n >= minLen {
-		return s
+		return ss
 	}
-	return s + strings.Repeat(" ", minLen-n)
+	return ss + strings.Repeat(" ", minLen-n)
 }
 
 // TemplateFuncs is the global registry of template functions available in all DOCX templates.

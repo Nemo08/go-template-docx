@@ -134,6 +134,12 @@ func afDocumentXML() afFile {
 
     <w:p><w:r><w:t>{{image .Logo}}</w:t></w:r></w:p>
 
+    <w:p><w:r><w:t>{{image "rect.png" 50}}</w:t></w:r></w:p>
+
+    <w:p><w:r><w:t>{{image "missing.png"}}</w:t></w:r></w:p>
+
+    <w:p><w:r><w:t>{{image "missing.png" 50}}</w:t></w:r></w:p>
+
     <w:p><w:r><w:t>{{range .Images}}{{image .}}{{end}}</w:t></w:r></w:p>
 
     <w:tbl>
@@ -221,12 +227,15 @@ func buildAllFeaturesDocx(t *testing.T) []byte {
 // ─── Test helpers ───────────────────────────────────────────────────────────────
 
 func smallPNG() []byte {
+	return rectPNG(1, 1)
+}
+
+func rectPNG(w, h int) []byte {
 	var buf bytes.Buffer
-	img := image.NewRGBA(image.Rect(0, 0, 1, 1))
-	img.Pix[0] = 255
-	img.Pix[1] = 0
-	img.Pix[2] = 0
-	img.Pix[3] = 255
+	img := image.NewRGBA(image.Rect(0, 0, w, h))
+	for i := range img.Pix {
+		img.Pix[i] = 255
+	}
 	_ = png.Encode(&buf, img)
 	return buf.Bytes()
 }
@@ -235,10 +244,12 @@ func smallPNG() []byte {
 
 func TestAllFeatures_RenderSuccess(t *testing.T) {
 	pngData := smallPNG()
+	rectData := rectPNG(2, 1)
 	docxBytes := buildAllFeaturesDocx(t)
 
 	result, err := Render(docxBytes, afDefaultData,
 		WithImage("logo.png", pngData),
+		WithImage("rect.png", rectData),
 		WithImage("img1.png", pngData),
 		WithImage("img2.png", pngData),
 		WithRemoveEmptyTableRows(true),
@@ -273,14 +284,42 @@ func TestAllFeatures_RenderSuccess(t *testing.T) {
 
 	// 4. Image placeholders replaced with <w:drawing>
 	drawingCount := strings.Count(docContent, "<w:drawing>")
-	// logo.png (single) + img1.png (range) + img2.png (range) + shape
-	if drawingCount < 2 {
-		t.Errorf("expected >=2 <w:drawing>, got %d", drawingCount)
+	// logo.png (single) + rect.png|W:50 + img1.png (range) + img2.png (range) + shape
+	if drawingCount < 4 {
+		t.Errorf("expected >=4 <w:drawing>, got %d", drawingCount)
 	}
 
-	// 5. Media files in output
+	// 5. Missing image (not in WithImage) does not error and no placeholder remains
+	if strings.Contains(docContent, "[[IMAGE:missing.png") {
+		t.Error("missing image placeholder remains in document")
+	}
+
+	// 6. Width-specified image generates correct EMU
+	if !strings.Contains(docContent, `cx="1800000"`) {
+		t.Error("expected 50mm width in EMU (cx=1800000)")
+	}
+	if !strings.Contains(docContent, `cy="900000"`) {
+		t.Error("expected proportional height for 2:1 image at 50mm width (cy=900000)")
+	}
+
+	// 7. No service placeholders remain in output
+	servicePlaceholders := []string{
+		"[[IMAGE:", "[[HIDEROW:", "[[SHAPE_BG_FILL_COLOR:",
+		"[[TABLE_CELL_BG_COLOR:", "\x00PAGEBREAK\x00", "\x00HIDEROW\x00",
+	}
+	for _, ph := range servicePlaceholders {
+		if strings.Contains(docContent, ph) {
+			t.Errorf("service placeholder %q remains in output", ph)
+		}
+	}
+
+	// 8. Media files in output
 	if !zipContains(t, result, "word/media/image1.png") {
 		t.Error("word/media/image1.png not found")
+	}
+	// missing.png should NOT appear in media
+	if zipContains(t, result, "word/media/missing.png") {
+		t.Error("missing.png should not be in output media")
 	}
 
 	// 6. Hidden row removed

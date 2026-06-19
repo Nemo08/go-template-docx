@@ -304,10 +304,14 @@ func shadeTextBg(s any, hex string) (string, error) {
 }
 
 // image wraps a placeholder around the given filename for image insertion in the document.
-func image(filename any) string {
+// If widthMM > 0 is provided, the image is scaled to that width in mm preserving aspect ratio.
+func image(filename any, width ...int) string {
 	s := fmt.Sprint(filename)
 	if s == "" || s == "<nil>" {
 		return ""
+	}
+	if len(width) > 0 && width[0] > 0 {
+		return fmt.Sprintf("[[IMAGE:%s|W:%d]]", s, width[0])
 	}
 	return fmt.Sprintf("[[IMAGE:%s]]", s)
 }

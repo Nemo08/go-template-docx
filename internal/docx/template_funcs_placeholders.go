@@ -15,6 +15,7 @@ import (
 
 var (
 	reImagePlaceholder = regexp.MustCompile(`\[\[IMAGE:.*?\]\]`)
+	reImageWidth       = regexp.MustCompile(`\|W:(\d+)$`)
 	imageTemplate      = template.Must(template.New("image-template").Parse(imageTemplateXML))
 )
 
@@ -23,8 +24,15 @@ func (d *documentMeta) applyImages(srcXML string) (string, []rels.MediaRel, erro
 
 	xmlBlocks := reImagePlaceholder.FindAllString(srcXML, -1)
 	for _, xmlBlock := range xmlBlocks {
-		filename := strings.TrimPrefix(xmlBlock, "[[IMAGE:")
-		filename = strings.TrimSuffix(filename, "]]")
+		raw := strings.TrimPrefix(xmlBlock, "[[IMAGE:")
+		raw = strings.TrimSuffix(raw, "]]")
+
+		filename := raw
+		var widthMM int
+		if m := reImageWidth.FindStringSubmatch(raw); len(m) > 1 {
+			widthMM, _ = strconv.Atoi(m[1])
+			filename = strings.TrimSuffix(raw, "|W:"+m[1])
+		}
 
 		buffer := bytes.Buffer{}
 		docPrID, err := d.RandUniqueDocPrID()
@@ -41,7 +49,12 @@ func (d *documentMeta) applyImages(srcXML string) (string, []rels.MediaRel, erro
 			continue
 		}
 
-		cx, cy, err := media.ComputeImageSize(v.Data, d.maxWidthInches, d.maxHeightInches)
+		var cx, cy int
+		if widthMM > 0 {
+			cx, cy, err = media.ComputeImageSizeWithWidth(v.Data, widthMM)
+		} else {
+			cx, cy, err = media.ComputeImageSize(v.Data, d.maxWidthInches, d.maxHeightInches)
+		}
 		if err != nil {
 			return srcXML, mediaRels, fmt.Errorf("unable to compute image size for '%s': %w", filename, err)
 		}

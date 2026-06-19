@@ -37,7 +37,8 @@ func (d *documentMeta) applyImages(srcXML string) (string, []rels.MediaRel, erro
 
 		v, ok := d.mediaMap[filename]
 		if !ok {
-			return srcXML, mediaRels, fmt.Errorf("filename '%s' not found in loaded medias", filename)
+			srcXML = strings.ReplaceAll(srcXML, xmlBlock, "")
+			continue
 		}
 
 		cx, cy, err := media.ComputeImageSize(v.Data, d.maxWidthInches, d.maxHeightInches)

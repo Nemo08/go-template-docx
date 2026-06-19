@@ -602,7 +602,7 @@ func TestRomanNum(t *testing.T) {
 }
 
 func TestRomanNum_OutOfRange(t *testing.T) {
-	for _, n := range []int{0, -1, 4000} {
+	for _, n := range []int{-1, 4000} {
 		if _, err := romanNum(n); err == nil {
 			t.Errorf("romanNum(%d): expected error", n)
 		}

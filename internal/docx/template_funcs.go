@@ -306,12 +306,18 @@ func shadeTextBg(s any, hex string) (string, error) {
 // image wraps a placeholder around the given filename for image insertion in the document.
 func image(filename any) string {
 	s := fmt.Sprint(filename)
+	if s == "" || s == "<nil>" {
+		return ""
+	}
 	return fmt.Sprintf("[[IMAGE:%s]]", s)
 }
 
 // replaceImage insert a placeholder around the given filename for image replacement in the document.
 func replaceImage(filename any) string {
 	s := fmt.Sprint(filename)
+	if s == "" || s == "<nil>" {
+		return ""
+	}
 	return fmt.Sprintf("[[REPLACE_IMAGE:%s]]", s)
 }
 
@@ -573,8 +579,11 @@ func truncate(s any, maxRunes int) string {
 
 // romanNum converts a positive integer to an uppercase Roman numeral.
 func romanNum(n int) (string, error) {
-	if n <= 0 || n > 3999 {
+	if n < 0 || n > 3999 {
 		return "", fmt.Errorf("romanNum: value %d out of range [1, 3999]", n)
+	}
+	if n == 0 {
+		return "", nil
 	}
 	type pair struct {
 		val int

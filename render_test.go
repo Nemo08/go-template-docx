@@ -350,6 +350,159 @@ func TestRender_DefaultErrorsOnMissingKey(t *testing.T) {
 	}
 }
 
+// --- $ref resolution tests ---
+
+func TestResolveRef_SimpleKey(t *testing.T) {
+	minimal := buildMinimalDocx(t, `{{.People1}}-{{.Worker1}}`)
+	result, err := Render(minimal, map[string]any{
+		"People1": "Иванов И.И.",
+		"Worker1": "$People1",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	content := extractDocxContent(t, result)
+	if !strings.Contains(content, "Иванов И.И.-Иванов И.И.") {
+		t.Errorf("expected resolved $ref, got:\n%s", content)
+	}
+}
+
+func TestResolveRef_NestedKey(t *testing.T) {
+	minimal := buildMinimalDocx(t, `{{.Signer}}`)
+	result, err := Render(minimal, map[string]any{
+		"org": map[string]any{"director": "Петров П.П."},
+		"Signer": "$org.director",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	content := extractDocxContent(t, result)
+	if !strings.Contains(content, "Петров П.П.") {
+		t.Errorf("expected nested $ref, got:\n%s", content)
+	}
+}
+
+func TestResolveRef_ArrayIndex(t *testing.T) {
+	minimal := buildMinimalDocx(t, `{{.First}}`)
+	result, err := Render(minimal, map[string]any{
+		"people": []any{"Иванов И.И.", "Петров П.П."},
+		"First":  "$people.0",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	content := extractDocxContent(t, result)
+	if !strings.Contains(content, "Иванов И.И.") {
+		t.Errorf("expected array index $ref, got:\n%s", content)
+	}
+}
+
+func TestResolveRef_ArrayIndexField(t *testing.T) {
+	minimal := buildMinimalDocx(t, `{{.SignerName}}`)
+	result, err := Render(minimal, map[string]any{
+		"employees": []any{
+			map[string]any{"name": "Иванов И.И.", "pos": "Директор"},
+			map[string]any{"name": "Петров П.П.", "pos": "Бухгалтер"},
+		},
+		"SignerName": "$employees.0.name",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	content := extractDocxContent(t, result)
+	if !strings.Contains(content, "Иванов И.И.") {
+		t.Errorf("expected array+field $ref, got:\n%s", content)
+	}
+}
+
+func TestResolveRef_DollarEscape(t *testing.T) {
+	minimal := buildMinimalDocx(t, `{{.Val}}`)
+	result, err := Render(minimal, map[string]any{
+		"Val": "$$literal",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	content := extractDocxContent(t, result)
+	if !strings.Contains(content, "$literal") {
+		t.Errorf("expected escaped $, got:\n%s", content)
+	}
+}
+
+func TestResolveRef_Unresolvable(t *testing.T) {
+	minimal := buildMinimalDocx(t, `{{.Worker1}}`)
+	result, err := Render(minimal, map[string]any{
+		"Worker1": "$UnknownKey",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	content := extractDocxContent(t, result)
+	if !strings.Contains(content, "$UnknownKey") {
+		t.Errorf("expected original $UnknownKey preserved, got:\n%s", content)
+	}
+}
+
+func TestResolveRef_RefInNestedMap(t *testing.T) {
+	minimal := buildMinimalDocx(t, `{{.org.signer}}`)
+	result, err := Render(minimal, map[string]any{
+		"people1": "Иванов И.И.",
+		"org": map[string]any{
+			"name":   "ООО Ромашка",
+			"signer": "$people1",
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	content := extractDocxContent(t, result)
+	if !strings.Contains(content, "Иванов И.И.") {
+		t.Errorf("expected ref resolved in nested map, got:\n%s", content)
+	}
+}
+
+func TestResolveRef_RefInArray(t *testing.T) {
+	minimal := buildMinimalDocx(t, `{{index .Items 0}}-{{index .Items 1}}`)
+	result, err := Render(minimal, map[string]any{
+		"Name":  "Тест",
+		"Items": []any{"$Name", "$Name"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	content := extractDocxContent(t, result)
+	if !strings.Contains(content, "Тест-Тест") {
+		t.Errorf("expected refs resolved in array, got:\n%s", content)
+	}
+}
+
+func TestResolveRef_JSONBytes(t *testing.T) {
+	minimal := buildMinimalDocx(t, `{{.People1}}-{{.Worker1}}`)
+	result, err := Render(minimal, []byte(`{"People1":"Иванов И.И.","Worker1":"$People1"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	content := extractDocxContent(t, result)
+	if !strings.Contains(content, "Иванов И.И.-Иванов И.И.") {
+		t.Errorf("expected $ref resolved in JSON bytes, got:\n%s", content)
+	}
+}
+
+func TestResolveRef_MapStringString(t *testing.T) {
+	minimal := buildMinimalDocx(t, `{{.A}}-{{.B}}`)
+	result, err := Render(minimal, map[string]string{
+		"A": "hello",
+		"B": "$A",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	content := extractDocxContent(t, result)
+	if !strings.Contains(content, "hello-hello") {
+		t.Errorf("expected $ref resolved in map[string]string, got:\n%s", content)
+	}
+}
+
 // extractDocxContent reads word/document.xml from a DOCX zip byte slice.
 func extractDocxContent(t *testing.T, docxBytes []byte) string {
 	t.Helper()

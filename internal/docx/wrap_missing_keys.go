@@ -2,9 +2,9 @@ package docx
 
 import (
 	"html"
-	"reflect"
 	"text/template"
-	"text/template/parse"
+
+	docxtemplate "github.com/JJJJJJack/go-template-docx/internal/template"
 )
 
 // WrapMissingKeys converts data to map[string]any and replaces nil with "".
@@ -37,7 +37,7 @@ func WrapMissingKeys(data any, tmpl *template.Template) map[string]any {
 			if t.Tree == nil || t.Root == nil {
 				continue
 			}
-			for varName := range extractFieldNames(t.Root) {
+			for varName := range docxtemplate.ExtractFieldNames(t.Root) {
 				if _, exists := m[varName]; !exists {
 					m[varName] = ""
 				}
@@ -71,49 +71,4 @@ func EscapeTemplateValues(data any) any {
 	}
 }
 
-func extractFieldNames(node parse.Node) map[string]struct{} {
-	result := map[string]struct{}{}
-	extractFieldNamesRec(node, result)
-	return result
-}
 
-func extractFieldNamesRec(node parse.Node, out map[string]struct{}) {
-	if node == nil {
-		return
-	}
-	if v := reflect.ValueOf(node); v.Kind() == reflect.Pointer && v.IsNil() {
-		return
-	}
-	switch n := node.(type) {
-	case *parse.ListNode:
-		for _, elem := range n.Nodes {
-			extractFieldNamesRec(elem, out)
-		}
-	case *parse.ActionNode:
-		extractFieldNamesRec(n.Pipe, out)
-	case *parse.IfNode:
-		extractFieldNamesRec(n.Pipe, out)
-		extractFieldNamesRec(n.List, out)
-		extractFieldNamesRec(n.ElseList, out)
-	case *parse.RangeNode:
-		extractFieldNamesRec(n.Pipe, out)
-		extractFieldNamesRec(n.List, out)
-		extractFieldNamesRec(n.ElseList, out)
-	case *parse.WithNode:
-		extractFieldNamesRec(n.Pipe, out)
-		extractFieldNamesRec(n.List, out)
-		extractFieldNamesRec(n.ElseList, out)
-	case *parse.PipeNode:
-		for _, cmd := range n.Cmds {
-			extractFieldNamesRec(cmd, out)
-		}
-	case *parse.CommandNode:
-		for _, arg := range n.Args {
-			extractFieldNamesRec(arg, out)
-		}
-	case *parse.FieldNode:
-		if len(n.Ident) > 0 {
-			out[n.Ident[0]] = struct{}{}
-		}
-	}
-}

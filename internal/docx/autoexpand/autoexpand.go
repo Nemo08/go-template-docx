@@ -1,13 +1,13 @@
 package autoexpand
 
 import (
-	"encoding/json"
 	"fmt"
 	"reflect"
 	"regexp"
 	"strings"
 	"sync"
 
+	"github.com/JJJJJJack/go-template-docx/internal/util"
 	"github.com/JJJJJJack/go-template-docx/internal/xmlutil"
 	"github.com/JJJJJJack/go-template-docx/internal/xml"
 )
@@ -46,7 +46,7 @@ func getNormalizeDocxplateRE(arrayName string) *regexp.Regexp {
 // expandable table rows in word/document.xml before the Go template engine
 // runs. It needs the template data to determine actual slice lengths.
 func AutoExpandRowsPreProcessor(data any) xml.HandlersMap {
-	dataMap := reflectToMap(data)
+	dataMap := util.ToStringMap(data)
 
 	handler := func(content string) (string, error) {
 		return expandRows(content, dataMap)
@@ -216,34 +216,4 @@ func sliceLen(dataMap map[string]any, key string) (int, bool) {
 	return 0, false
 }
 
-func reflectToMap(data any) map[string]any {
-	if data == nil {
-		return nil
-	}
-	switch v := data.(type) {
-	case map[string]any:
-		return v
-	case map[string]string:
-		m := make(map[string]any, len(v))
-		for k, val := range v {
-			m[k] = val
-		}
-		return m
-	case []byte:
-		var m map[string]any
-		if err := json.Unmarshal(v, &m); err != nil {
-			return nil
-		}
-		return m
-	default:
-		b, err := json.Marshal(v)
-		if err != nil {
-			return nil
-		}
-		var m map[string]any
-		if err := json.Unmarshal(b, &m); err != nil {
-			return nil
-		}
-		return m
-	}
-}
+

@@ -101,3 +101,52 @@ func TestExtractAllVariables_NilTree(t *testing.T) {
 		t.Errorf("expected no vars for nil tree, got %v", vars)
 	}
 }
+
+func TestExtractFieldNames_Simple(t *testing.T) {
+	tmpl, err := template.New("test").Parse(`{{.Name}} {{.Age}}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	vars := ExtractFieldNames(tmpl.Root)
+	if len(vars) != 2 {
+		t.Fatalf("expected 2 vars, got %v", vars)
+	}
+	if _, ok := vars["Name"]; !ok {
+		t.Errorf("expected Name in vars, got %v", vars)
+	}
+	if _, ok := vars["Age"]; !ok {
+		t.Errorf("expected Age in vars, got %v", vars)
+	}
+}
+
+func TestExtractFieldNames_Nested(t *testing.T) {
+	tmpl, err := template.New("test").Parse(`{{.User.Name}}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	vars := ExtractFieldNames(tmpl.Root)
+	if len(vars) != 1 {
+		t.Fatalf("expected 1 var, got %v", vars)
+	}
+	if _, ok := vars["User"]; !ok {
+		t.Errorf("expected User in vars, got %v", vars)
+	}
+}
+
+func TestExtractFieldNames_Empty(t *testing.T) {
+	tmpl, err := template.New("test").Parse(`static text`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	vars := ExtractFieldNames(tmpl.Root)
+	if len(vars) != 0 {
+		t.Errorf("expected no vars, got %v", vars)
+	}
+}
+
+func TestExtractFieldNames_NilNode(t *testing.T) {
+	vars := ExtractFieldNames(nil)
+	if len(vars) != 0 {
+		t.Errorf("expected no vars for nil, got %v", vars)
+	}
+}

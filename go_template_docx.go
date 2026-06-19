@@ -11,6 +11,7 @@ import (
 	"path"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"text/template"
 
@@ -22,6 +23,7 @@ import (
 	"github.com/JJJJJJack/go-template-docx/internal/xlsx"
 	docxtemplate "github.com/JJJJJJack/go-template-docx/internal/template"
 	"github.com/JJJJJJack/go-template-docx/internal/xmlutil"
+	"github.com/JJJJJJack/go-template-docx/internal/util"
 	"github.com/JJJJJJack/go-template-docx/internal/zio"
 	"github.com/JJJJJJack/go-template-docx/internal/xml"
 )
@@ -153,15 +155,102 @@ func (c *TemplateConfig) normalize(templateValues any) any {
 				m[k] = ""
 			}
 		}
+		resolveRefs(m)
 		return m
 	case map[string]string:
 		m := make(map[string]any, len(v))
 		for k, val := range v {
 			m[k] = val
 		}
+		resolveRefs(m)
 		return m
+	case map[string]any:
+		resolveRefs(v)
+		return v
 	}
 	return templateValues
+}
+
+// resolveRefs рекурсивно обходит data и разрешает строки вида $key.path.
+// Поиск значений всегда ведётся от корня данных, а не от текущей вложенности.
+func resolveRefs(data map[string]any) {
+	resolveRefsIn(data, data)
+}
+
+// resolveRefsIn рекурсивно обходит узел node, подставляя значения из корня root.
+func resolveRefsIn(node, root map[string]any) {
+	for k, v := range node {
+		switch val := v.(type) {
+		case string:
+			if resolved := resolveRef(root, val); resolved != val {
+				node[k] = resolved
+			}
+		case map[string]any:
+			resolveRefsIn(val, root)
+		case []any:
+			for i, item := range val {
+				if s, ok := item.(string); ok {
+					if resolved := resolveRef(root, s); resolved != s {
+						val[i] = resolved
+					}
+				} else if m, ok := item.(map[string]any); ok {
+					resolveRefsIn(m, root)
+				}
+			}
+		}
+	}
+}
+
+// resolveRef разрешает один $ref на основе корневых данных.
+// $$ в начале строки экранируется в $.
+// Неразрешимые ссылки возвращаются без изменений.
+// Если результат разрешения — строка, начинающаяся с $, resolveRef
+// рекурсивно разрешает её (глубина не более 10).
+func resolveRef(root map[string]any, s string) any {
+	return resolveRefDepth(root, s, 0)
+}
+
+func resolveRefDepth(root map[string]any, s string, depth int) any {
+	if depth > 10 {
+		return s
+	}
+	if len(s) == 0 || s[0] != '$' {
+		return s
+	}
+	if strings.HasPrefix(s, "$$") {
+		return s[1:]
+	}
+	if s == "$" {
+		return s
+	}
+
+	path := strings.TrimPrefix(s, "$")
+	parts := strings.Split(path, ".")
+
+	current := any(root)
+	for _, part := range parts {
+		switch node := current.(type) {
+		case map[string]any:
+			next, ok := node[part]
+			if !ok {
+				return s
+			}
+			current = next
+		case []any:
+			idx, err := strconv.Atoi(part)
+			if err != nil || idx < 0 || idx >= len(node) {
+				return s
+			}
+			current = node[idx]
+		default:
+			return s
+		}
+	}
+
+	if result, ok := current.(string); ok {
+		return resolveRefDepth(root, result, depth+1)
+	}
+	return current
 }
 
 // applyTemplatePipeline runs the core template pipeline: parse input, apply template, write output.
@@ -213,7 +302,7 @@ func (p *TemplateProcessor) applyTemplatePipeline(templateValues any) (err error
 
 	var warnDataMap map[string]any
 	if p.Config.WarnOnMissingKey {
-		warnDataMap = toStringMap(templateValues)
+		warnDataMap = util.ToStringMap(templateValues)
 	}
 
 	if err := p.processHeadersFootersDocument(zipWriter, src, document.ApplyTemplate, templateValues, warnDataMap); err != nil {
@@ -691,39 +780,6 @@ func (dt *docxTemplate) AddPreProcessors(filesPreProcessors ...xml.HandlersMap) 
 // AddPostProcessors adds XML post-processing maps.
 func (dt *docxTemplate) AddPostProcessors(filesPostProcessors ...xml.HandlersMap) {
 	dt.Config.PostProcessors = append(dt.Config.PostProcessors, filesPostProcessors...)
-}
-
-// toStringMap converts templateValues to map[string]any for key checking.
-func toStringMap(templateValues any) map[string]any {
-	switch v := templateValues.(type) {
-	case map[string]any:
-		return v
-	case map[string]string:
-		m := make(map[string]any, len(v))
-		for k, val := range v {
-			m[k] = val
-		}
-		return m
-	case []byte:
-		if len(v) == 0 {
-			return map[string]any{}
-		}
-		var m map[string]any
-		if err := json.Unmarshal(v, &m); err != nil {
-			return nil
-		}
-		return m
-	default:
-		b, err := json.Marshal(v)
-		if err != nil {
-			return nil
-		}
-		var m map[string]any
-		if err := json.Unmarshal(b, &m); err != nil {
-			return nil
-		}
-		return m
-	}
 }
 
 // GetTemplateVariables extracts all template variables from the DOCX file.

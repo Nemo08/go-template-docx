@@ -74,6 +74,42 @@ func TestComputeImageSize_EmptyData(t *testing.T) {
 	}
 }
 
+func TestComputeImageSizeWithWidth_Valid(t *testing.T) {
+	pngData := createTestPNG(t, 100, 50)
+	cx, cy, err := ComputeImageSizeWithWidth(pngData, 100)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cx <= 0 || cy <= 0 {
+		t.Errorf("expected positive dimensions, got cx=%d cy=%d", cx, cy)
+	}
+}
+
+func TestComputeImageSizeWithWidth_InvalidData(t *testing.T) {
+	_, _, err := ComputeImageSizeWithWidth([]byte("not-an-image"), 100)
+	if err == nil {
+		t.Fatal("expected error for invalid image data")
+	}
+}
+
+func TestImageDimensions_Valid(t *testing.T) {
+	pngData := createTestPNG(t, 200, 100)
+	w, h, err := ImageDimensions(pngData)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if w != 200 || h != 100 {
+		t.Errorf("expected 200x100, got %dx%d", w, h)
+	}
+}
+
+func TestImageDimensions_Invalid(t *testing.T) {
+	_, _, err := ImageDimensions([]byte{})
+	if err == nil {
+		t.Fatal("expected error for empty data")
+	}
+}
+
 func TestMediaMap(t *testing.T) {
 	m := make(MediaMap)
 	m["img.png"] = &Media{Data: []byte("data"), WordFilename: "image/image.png"}

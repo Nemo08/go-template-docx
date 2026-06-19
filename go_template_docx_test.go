@@ -9,6 +9,7 @@ import (
 
 	"github.com/JJJJJJack/go-template-docx/internal/docx"
 	"github.com/JJJJJJack/go-template-docx/internal/docx/media"
+	"github.com/JJJJJJack/go-template-docx/internal/util"
 )
 
 func TestCopyTemplateFuncs(t *testing.T) {
@@ -37,7 +38,7 @@ func TestCopyTemplateFuncs_Empty(t *testing.T) {
 
 func TestToStringMap_MapStringAny(t *testing.T) {
 	input := map[string]any{"key": "val"}
-	got := toStringMap(input)
+	got := util.ToStringMap(input)
 	if got["key"] != "val" {
 		t.Errorf("expected val, got %v", got["key"])
 	}
@@ -45,7 +46,7 @@ func TestToStringMap_MapStringAny(t *testing.T) {
 
 func TestToStringMap_MapStringString(t *testing.T) {
 	input := map[string]string{"key": "val"}
-	got := toStringMap(input)
+	got := util.ToStringMap(input)
 	if got["key"] != "val" {
 		t.Errorf("expected val, got %v", got["key"])
 	}
@@ -53,7 +54,7 @@ func TestToStringMap_MapStringString(t *testing.T) {
 
 func TestToStringMap_JSONBytes(t *testing.T) {
 	input := []byte(`{"key":"val"}`)
-	got := toStringMap(input)
+	got := util.ToStringMap(input)
 	if got["key"] != "val" {
 		t.Errorf("expected val, got %v", got["key"])
 	}
@@ -61,7 +62,7 @@ func TestToStringMap_JSONBytes(t *testing.T) {
 
 func TestToStringMap_EmptyBytes(t *testing.T) {
 	input := []byte{}
-	got := toStringMap(input)
+	got := util.ToStringMap(input)
 	if len(got) != 0 {
 		t.Errorf("expected empty map, got %v", got)
 	}
@@ -69,7 +70,7 @@ func TestToStringMap_EmptyBytes(t *testing.T) {
 
 func TestToStringMap_InvalidBytes(t *testing.T) {
 	input := []byte(`not json`)
-	got := toStringMap(input)
+	got := util.ToStringMap(input)
 	if got != nil {
 		t.Errorf("expected nil for invalid json, got %v", got)
 	}
@@ -79,14 +80,14 @@ func TestToStringMap_Struct(t *testing.T) {
 	input := struct {
 		Name string `json:"name"`
 	}{Name: "test"}
-	got := toStringMap(input)
+	got := util.ToStringMap(input)
 	if got["name"] != "test" {
 		t.Errorf("expected test, got %v", got["name"])
 	}
 }
 
 func TestToStringMap_NonMapType(t *testing.T) {
-	got := toStringMap(42)
+	got := util.ToStringMap(42)
 	if got != nil {
 		t.Errorf("expected nil for int, got %v", got)
 	}

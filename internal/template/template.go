@@ -3,6 +3,7 @@
 package template
 
 import (
+	"reflect"
 	"text/template"
 	"text/template/parse"
 )
@@ -46,6 +47,55 @@ func collectVariables(node parse.Node, vars map[string]struct{}) {
 	case *parse.VariableNode:
 		// Example: {{$var}} or {{$var.Field}}
 		vars[n.String()] = struct{}{}
+	}
+}
+
+// ExtractFieldNames извлекает имена полей первого уровня (например, .Name из .Name.First)
+// из переданного узла AST. Идентично extractFieldNamesRec в docx/wrap_missing_keys.go.
+func ExtractFieldNames(node parse.Node) map[string]struct{} {
+	result := map[string]struct{}{}
+	collectFieldNamesRec(node, result)
+	return result
+}
+
+func collectFieldNamesRec(node parse.Node, out map[string]struct{}) {
+	if node == nil {
+		return
+	}
+	if v := reflect.ValueOf(node); v.Kind() == reflect.Pointer && v.IsNil() {
+		return
+	}
+	switch n := node.(type) {
+	case *parse.ListNode:
+		for _, elem := range n.Nodes {
+			collectFieldNamesRec(elem, out)
+		}
+	case *parse.ActionNode:
+		collectFieldNamesRec(n.Pipe, out)
+	case *parse.IfNode:
+		collectFieldNamesRec(n.Pipe, out)
+		collectFieldNamesRec(n.List, out)
+		collectFieldNamesRec(n.ElseList, out)
+	case *parse.RangeNode:
+		collectFieldNamesRec(n.Pipe, out)
+		collectFieldNamesRec(n.List, out)
+		collectFieldNamesRec(n.ElseList, out)
+	case *parse.WithNode:
+		collectFieldNamesRec(n.Pipe, out)
+		collectFieldNamesRec(n.List, out)
+		collectFieldNamesRec(n.ElseList, out)
+	case *parse.PipeNode:
+		for _, cmd := range n.Cmds {
+			collectFieldNamesRec(cmd, out)
+		}
+	case *parse.CommandNode:
+		for _, arg := range n.Args {
+			collectFieldNamesRec(arg, out)
+		}
+	case *parse.FieldNode:
+		if len(n.Ident) > 0 {
+			out[n.Ident[0]] = struct{}{}
+		}
 	}
 }
 

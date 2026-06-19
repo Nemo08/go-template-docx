@@ -3,11 +3,13 @@ package autoexpand
 import (
 	"strings"
 	"testing"
+
+	"github.com/JJJJJJack/go-template-docx/internal/util"
 )
 
 func TestReflectToMap_MapStringAny(t *testing.T) {
 	input := map[string]any{"Rows": []any{1, 2, 3}}
-	got := reflectToMap(input)
+	got := util.ToStringMap(input)
 	if got == nil {
 		t.Fatal("expected non-nil map")
 	}
@@ -20,7 +22,7 @@ func TestReflectToMap_Struct(t *testing.T) {
 	type Row struct{ Name string }
 	type Data struct{ Items []Row }
 	input := Data{Items: []Row{{Name: "A"}, {Name: "B"}}}
-	got := reflectToMap(input)
+	got := util.ToStringMap(input)
 	if got == nil {
 		t.Fatal("expected non-nil")
 	}
@@ -28,21 +30,21 @@ func TestReflectToMap_Struct(t *testing.T) {
 
 func TestReflectToMap_JSONBytes(t *testing.T) {
 	input := []byte(`{"Rows":[1,2]}`)
-	got := reflectToMap(input)
+	got := util.ToStringMap(input)
 	if got == nil {
 		t.Fatal("expected non-nil")
 	}
 }
 
 func TestReflectToMap_Nil(t *testing.T) {
-	got := reflectToMap(nil)
+	got := util.ToStringMap(nil)
 	if got != nil {
 		t.Error("expected nil for nil input")
 	}
 }
 
 func TestReflectToMap_InvalidJSON(t *testing.T) {
-	got := reflectToMap([]byte("not json"))
+	got := util.ToStringMap([]byte("not json"))
 	if got != nil {
 		t.Error("expected nil for invalid json bytes")
 	}

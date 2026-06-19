@@ -64,6 +64,46 @@ Builder можно чейнить: `b.WithFuncs(...).WithIgnoreMissingKey(true).
 | `WithRemoveRangeRows(v)` | Удалять строки-директивы range (по ум. false) |
 | `WithIgnoreMissingKey(v)` | Игнорировать отсутствующие ключи (по ум. false) |
 
+## Ссылки (`$ref`) в данных
+
+Чтобы не дублировать одинаковые значения, в данных можно ссылаться на другие ключи через префикс `$`:
+
+```go
+Render(docx, map[string]any{
+    "Director": "Иванов И.И.",
+    "Signer":   "$Director",               // ⇒ "Иванов И.И."
+})
+```
+
+Доступ к вложенным полям и массивам — через точку:
+
+```go
+Render(docx, map[string]any{
+    "org":      map[string]any{"director": "Петров П.П."},
+    "OrgSigner": "$org.director",           // ⇒ "Петров П.П."
+
+    "employees": []any{"Иванов И.И.", "Петров П.П."},
+    "First":     "$employees.0",            // ⇒ "Иванов И.И."
+    "Second":    "$employees.1",            // ⇒ "Петров П.П."
+
+    "Ctx":   map[string]any{"signer": "$Director"},
+})
+```
+
+Экранирование: `$$` → `$`:
+
+```go
+Render(docx, map[string]any{"Val": "$$literal"})  // ⇒ "$literal"
+```
+
+Неразрешимые ссылки остаются как есть:
+
+```go
+Render(docx, map[string]any{"Val": "$unknown"})    // ⇒ "$unknown"
+```
+
+Работает при любом способе передачи данных: `map[string]any`, `[]byte`(JSON), `map[string]string`.
+
 V1 (`NewDocxTemplateFromBytes`/`NewDocxTemplateFromFilename`) полностью совместима и остаётся без изменений.
 
 ---

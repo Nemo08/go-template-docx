@@ -434,6 +434,75 @@ func TestAllFeatures_DeleteMissingKey(t *testing.T) {
 	}
 }
 
+func TestAllFeatures_ResolveRef(t *testing.T) {
+	var buf bytes.Buffer
+	w := zio.NewZipWriter(&buf)
+	for _, f := range []afFile{
+		afContentTypes(),
+		afDocRels(),
+		{"word/document.xml", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body>
+    <w:p><w:r><w:t>simple={{.Signer}}</w:t></w:r></w:p>
+    <w:p><w:r><w:t>nested={{.OrgSigner}}</w:t></w:r></w:p>
+    <w:p><w:r><w:t>arr={{.FirstEmployee}}</w:t></w:r></w:p>
+    <w:p><w:r><w:t>arrf={{.FirstEmployeeName}}</w:t></w:r></w:p>
+    <w:p><w:r><w:t>escape={{.Escaped}}</w:t></w:r></w:p>
+    <w:p><w:r><w:t>missing={{.MissingRef}}</w:t></w:r></w:p>
+    <w:p><w:r><w:t>noref={{.NoRef}}</w:t></w:r></w:p>
+    <w:p><w:r><w:t>arrref={{index .ArrRefs 0}}|{{index .ArrRefs 1}}</w:t></w:r></w:p>
+    <w:p><w:r><w:t>nestedmap={{.Ctx.signer}}</w:t></w:r></w:p>
+    <w:sectPr>
+      <w:pgSz w:w="12240" w:h="15840"/>
+      <w:pgMar w:top="1440" w:bottom="1440" w:left="1440" w:right="1440"/>
+    </w:sectPr>
+  </w:body>
+</w:document>`},
+	} {
+		fh, _ := w.Create(f.name)
+		_, _ = fh.Write([]byte(f.content))
+	}
+	_ = w.Close()
+	docxBytes := buf.Bytes()
+
+	result, err := Render(docxBytes, map[string]any{
+		"Director":   "Иванов И.И.",
+		"Signer":     "$Director",
+		"OrgSigner":  "$org.director",
+		"org":        map[string]any{"director": "Петров П.П."},
+		"employees":  []any{"Иванов И.И.", "Петров П.П."},
+		"FirstEmployee":     "$employees.0",
+		"FirstEmployeeName": "$employees.1",
+		"Escaped":     "$$literal",
+		"MissingRef":  "$nonexistent",
+		"NoRef":       "plain",
+		"ArrRefs":     []any{"$Director", "$OrgSigner"},
+		"Ctx":         map[string]any{"signer": "$Director"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	docContent := string(extractFromZip(t, result, "word/document.xml"))
+
+	assertContains := func(label, want string) {
+		t.Helper()
+		if !strings.Contains(docContent, want) {
+			t.Errorf("%s: expected %q, got:\n%s", label, want, docContent)
+		}
+	}
+
+	assertContains("simple", "simple=Иванов И.И.")
+	assertContains("nested", "nested=Петров П.П.")
+	assertContains("arr", "arr=Иванов И.И.")
+	assertContains("arrf", "arrf=Петров П.П.")
+	assertContains("escape", "escape=$literal")
+	assertContains("missing", "missing=$nonexistent")
+	assertContains("noref", "noref=plain")
+	assertContains("arrref", "arrref=Иванов И.И.|Петров П.П.")
+	assertContains("nestedmap", "nestedmap=Иванов И.И.")
+}
+
 func TestAllFeatures_ErrorOnMissingKey(t *testing.T) {
 	docxBytes := buildAllFeaturesDocx(t)
 	data := map[string]any{

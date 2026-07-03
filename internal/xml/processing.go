@@ -58,6 +58,13 @@ func processFileWithHandlers(outputZipWriter zio.ZipWriter, src zio.FileSource, 
 }
 
 // ProcessedOutput applies pre/post-processor handlers to all files in a DOCX zip buffer.
+// Каждая HandlersMap в слайсе обрабатывается независимо и последовательно:
+// для каждого файла сначала ищется точный ключ (filename), и только если
+// его нет — применяется wildcard-ключ "*" (для .xml/.rels частей).
+// Точный ключ и wildcard в рамках одной HandlersMap — взаимоисключающий
+// выбор (exact побеждает). Но если точный ключ лежит в одной карте,
+// а wildcard — в другой (следующей в слайсе), они оба применяются
+// к одному и тому же файлу. Это ожидаемое поведение, а не баг.
 func ProcessedOutput(filesProcessorsMaps []HandlersMap, outputBuffer *bytes.Buffer, preOrPost string) error {
 	for _, filesPostProcessorsMap := range filesProcessorsMaps {
 		zipBytes := append([]byte(nil), outputBuffer.Bytes()...)

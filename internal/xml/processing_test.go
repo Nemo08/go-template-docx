@@ -217,7 +217,13 @@ func TestProcessedOutput_WildcardDoesNotCorruptBinary(t *testing.T) {
 	}
 }
 
-func TestProcessedOutput_WildcardDoesNotOverrideExactKey(t *testing.T) {
+// TestProcessedOutput_ExactKeyTakesPrecedenceInSameMap проверяет,
+// что в пределах одной HandlersMap exact-ключ (a.xml) имеет приоритет
+// перед wildcard-ключом (*). Если же exact-ключ и wildcard находятся
+// в разных HandlersMap одного слайса (например, DefaultPreProcessors
+// и DocxplateCompatPreProcessor), обе карты применяются к файлу
+// последовательно — это НЕ баг, а ожидаемое поведение ProcessedOutput.
+func TestProcessedOutput_ExactKeyTakesPrecedenceInSameMap(t *testing.T) {
 	var buf bytes.Buffer
 	zw := zip.NewWriter(&buf)
 	fw, _ := zw.Create("a.xml")

@@ -139,6 +139,63 @@ func TestProcessedOutput_InvalidZip(t *testing.T) {
 	}
 }
 
+func TestProcessedOutput_WildcardKey(t *testing.T) {
+	var buf bytes.Buffer
+	zw := zip.NewWriter(&buf)
+	fw, _ := zw.Create("a.xml")
+	_, _ = fw.Write([]byte("before"))
+	fw2, _ := zw.Create("b.txt")
+	_, _ = fw2.Write([]byte("untouched"))
+	_ = zw.Close()
+
+	proc := HandlersMap{
+		"*": {func(s string) (string, error) {
+			return strings.ToUpper(s), nil
+		}},
+	}
+
+	err := ProcessedOutput([]HandlersMap{proc}, &buf, "test")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	gotA := readZipEntry(t, buf.Bytes(), "a.xml")
+	if gotA != "BEFORE" {
+		t.Errorf("a.xml got %q, want %q", gotA, "BEFORE")
+	}
+	gotB := readZipEntry(t, buf.Bytes(), "b.txt")
+	if gotB != "UNTOUCHED" {
+		t.Errorf("b.txt got %q, want %q", gotB, "UNTOUCHED")
+	}
+}
+
+func TestProcessedOutput_WildcardDoesNotOverrideExactKey(t *testing.T) {
+	var buf bytes.Buffer
+	zw := zip.NewWriter(&buf)
+	fw, _ := zw.Create("a.xml")
+	_, _ = fw.Write([]byte("data"))
+	_ = zw.Close()
+
+	proc := HandlersMap{
+		"*": {func(s string) (string, error) {
+			return "wildcard", nil
+		}},
+		"a.xml": {func(s string) (string, error) {
+			return "exact", nil
+		}},
+	}
+
+	err := ProcessedOutput([]HandlersMap{proc}, &buf, "test")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	got := readZipEntry(t, buf.Bytes(), "a.xml")
+	if got != "exact" {
+		t.Errorf("got %q, want %q", got, "exact")
+	}
+}
+
 func TestProcessedOutput_MultipleMaps(t *testing.T) {
 	var buf bytes.Buffer
 	zw := zip.NewWriter(&buf)

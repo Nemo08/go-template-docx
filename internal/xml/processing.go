@@ -59,7 +59,11 @@ func ProcessedOutput(filesProcessorsMaps []HandlersMap, outputBuffer *bytes.Buff
 		outputZipWriter := zio.NewZipWriter(outputBuffer)
 
 		err = src.Each(func(filename string) error {
-			return processFileWithHandlers(outputZipWriter, src, filename, filesPostProcessorsMap[filename], preOrPost)
+			handlers := filesPostProcessorsMap[filename]
+			if handlers == nil {
+				handlers = filesPostProcessorsMap["*"]
+			}
+			return processFileWithHandlers(outputZipWriter, src, filename, handlers, preOrPost)
 		})
 		if err != nil {
 			_ = outputZipWriter.Close()

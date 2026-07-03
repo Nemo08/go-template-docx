@@ -21,6 +21,8 @@ var (
 	reAnyIndex = regexp.MustCompile(`(\.)(\d+)(\.)`)
 
 	// reDocxplateVar matches docxplate-like references: {{ArrayName.Field}} or {{.ArrayName.Field}}.
+	// Logically related to docx.reNoDotDocxplate which normalises the same syntax
+	// to {{.Word.Word}} across all XML parts. If you change one, check the other.
 	reDocxplateVar = regexp.MustCompile(`\{\{\s*\.?(\w+)\.(\w+)\s*\}\}`)
 
 	// reIndexPattern matches "index .X 0" function call to replace 0.

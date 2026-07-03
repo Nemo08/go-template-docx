@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/JJJJJJack/go-template-docx/internal/docx/autoexpand"
-	"github.com/JJJJJJack/go-template-docx/internal/xmlutil"
 )
 
 func TestNormalizeDocxplateHandler_DocxplateSyntax(t *testing.T) {
@@ -86,8 +85,8 @@ func TestDocxplateCompatPreProcessor_ReturnsWildcardKey(t *testing.T) {
 }
 
 func TestDocxplateCompat_SplitRun(t *testing.T) {
-	// Симулирует pipeline: DefaultPreProcessors (PatchXML через wildcard)
-	// запускается первой, затем DocxplateCompatPreProcessor (normalize).
+	// normalizeDocxplateHandler вызывает PatchXML внутри, поэтому
+	// разорванные {{ }} склеиваются, XML-теги удаляются, regex нормализует.
 	docxXML := `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
   <w:body>
@@ -98,8 +97,7 @@ func TestDocxplateCompat_SplitRun(t *testing.T) {
   </w:body>
 </w:document>`
 
-	patched := xmlutil.PatchXML(docxXML)
-	got, err := normalizeDocxplateHandler(patched)
+	got, err := normalizeDocxplateHandler(docxXML)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -154,8 +152,7 @@ func TestDocxplateCompat_SplitRunInsideWord(t *testing.T) {
   </w:body>
 </w:document>`
 
-	patched := xmlutil.PatchXML(docxXML)
-	got, err := normalizeDocxplateHandler(patched)
+	got, err := normalizeDocxplateHandler(docxXML)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

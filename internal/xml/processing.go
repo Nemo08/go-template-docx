@@ -5,9 +5,21 @@ package xml
 import (
 	"bytes"
 	"fmt"
+	"path/filepath"
+	"strings"
 
 	"github.com/JJJJJJack/go-template-docx/internal/zio"
 )
+
+// isTextPart возвращает true для частей docx-архива, содержимое которых
+// представляет собой текст/XML, а не бинарные данные (изображения, шрифты,
+// встроенные объекты, OLE и т.п.). Wildcard-ключ "*" в HandlersMap
+// применяется ТОЛЬКО к таким частям, чтобы избежать повреждения бинарных
+// данных при конвертации []byte → string → []byte.
+func isTextPart(name string) bool {
+	ext := strings.ToLower(filepath.Ext(name))
+	return ext == ".xml" || ext == ".rels"
+}
 
 // Handler takes the content of a file and returns the modified
 // content that will replace it.
@@ -60,7 +72,7 @@ func ProcessedOutput(filesProcessorsMaps []HandlersMap, outputBuffer *bytes.Buff
 
 		err = src.Each(func(filename string) error {
 			handlers := filesPostProcessorsMap[filename]
-			if handlers == nil {
+			if handlers == nil && isTextPart(filename) {
 				handlers = filesPostProcessorsMap["*"]
 			}
 			return processFileWithHandlers(outputZipWriter, src, filename, handlers, preOrPost)

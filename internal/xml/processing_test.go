@@ -144,8 +144,11 @@ func TestProcessedOutput_WildcardKey(t *testing.T) {
 	zw := zip.NewWriter(&buf)
 	fw, _ := zw.Create("a.xml")
 	_, _ = fw.Write([]byte("before"))
+	// b.txt не xml/rels — wildcard не применяется, должно остаться нетронутым.
 	fw2, _ := zw.Create("b.txt")
 	_, _ = fw2.Write([]byte("untouched"))
+	fw3, _ := zw.Create("c.rels")
+	_, _ = fw3.Write([]byte("links"))
 	_ = zw.Close()
 
 	proc := HandlersMap{
@@ -164,8 +167,53 @@ func TestProcessedOutput_WildcardKey(t *testing.T) {
 		t.Errorf("a.xml got %q, want %q", gotA, "BEFORE")
 	}
 	gotB := readZipEntry(t, buf.Bytes(), "b.txt")
-	if gotB != "UNTOUCHED" {
-		t.Errorf("b.txt got %q, want %q", gotB, "UNTOUCHED")
+	if gotB != "untouched" {
+		t.Errorf("b.txt (non-text) got %q, want %q", gotB, "untouched")
+	}
+	gotC := readZipEntry(t, buf.Bytes(), "c.rels")
+	if gotC != "LINKS" {
+		t.Errorf("c.rels got %q, want %q", gotC, "LINKS")
+	}
+}
+
+func TestProcessedOutput_WildcardDoesNotCorruptBinary(t *testing.T) {
+	// Бинарные данные: PNG-заголовок + произвольные байты, включая невалидный UTF-8.
+	binaryData := []byte{
+		0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, // PNG magic
+		0xFF, 0xFE, 0x00, 0x01,                             // невалидный UTF-8
+		0x7B, 0x7B, 0x58, 0x2E, 0x59, 0x7D, 0x7D,          // случайный {{X.Y}}
+	}
+	var buf bytes.Buffer
+	zw := zip.NewWriter(&buf)
+	fw, _ := zw.Create("word/media/image1.png")
+	_, _ = fw.Write(binaryData)
+	fw2, _ := zw.Create("word/document.xml")
+	_, _ = fw2.Write([]byte("<p>data</p>"))
+	_ = zw.Close()
+
+	original := make([]byte, len(binaryData))
+	copy(original, binaryData)
+	// создаём заглушку-хендлер: если он применится к бинарному файлу —
+	// будет видно по содержимому
+	double := func(s string) (string, error) { return s + s, nil }
+
+	proc := HandlersMap{
+		"*": {double},
+	}
+
+	err := ProcessedOutput([]HandlersMap{proc}, &buf, "test")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	gotPNG := readZipEntryBytes(t, buf.Bytes(), "word/media/image1.png")
+	if !bytes.Equal(gotPNG, original) {
+		t.Errorf("binary file corrupted: len before=%d, after=%d", len(original), len(gotPNG))
+	}
+
+	gotXML := readZipEntry(t, buf.Bytes(), "word/document.xml")
+	if gotXML != "<p>data</p><p>data</p>" {
+		t.Errorf("document.xml not processed by wildcard: got %q", gotXML)
 	}
 }
 
@@ -256,6 +304,25 @@ func (s *testZipSrc) Each(fn func(name string) error) error {
 			return err
 		}
 	}
+	return nil
+}
+
+func readZipEntryBytes(t *testing.T, data []byte, name string) []byte {
+	t.Helper()
+	r, err := zip.NewReader(bytes.NewReader(data), int64(len(data)))
+	if err != nil {
+		t.Fatalf("failed to open zip: %v", err)
+	}
+	for _, f := range r.File {
+		if f.Name == name {
+			rc, _ := f.Open()
+			defer func() { _ = rc.Close() }()
+			buf := new(bytes.Buffer)
+			_, _ = buf.ReadFrom(rc)
+			return buf.Bytes()
+		}
+	}
+	t.Fatalf("entry %q not found in zip", name)
 	return nil
 }
 

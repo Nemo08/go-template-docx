@@ -966,9 +966,12 @@ func AutoExpandRows(data any) TemplateOption {
 }
 
 // WithDocxplateCompat enables compatibility with docxplate/JJack syntax
-// ({{Word.Word}} without a leading dot). It registers a pre-processor that
-// normalises these patterns to {{.Word.Word}} (valid Go template syntax)
-// across all XML parts of the document. This is a RenderOption for v2 API.
+// ({{Word.Word}} without a leading dot). It registers a pre-processor with
+// a wildcard key "*" that normalises these patterns to {{.Word.Word}} (valid
+// Go template syntax) across all XML (.xml, .rels) parts of the document.
+// Binary parts (images, embedded files) are never touched — the wildcard
+// respects the isTextPart() filter to avoid byte corruption from round-tripping
+// invalid UTF-8 through string conversion. This is a RenderOption for v2 API.
 func WithDocxplateCompat() RenderOption {
 	return func(t *docxTemplate) {
 		t.AddPreProcessors(docx.DocxplateCompatPreProcessor())
@@ -976,6 +979,7 @@ func WithDocxplateCompat() RenderOption {
 }
 
 // DocxplateCompat is the v1-style TemplateOption equivalent.
+// See WithDocxplateCompat for details.
 func DocxplateCompat() TemplateOption {
 	return func(c *TemplateConfig) {
 		c.PreProcessors = append(c.PreProcessors, docx.DocxplateCompatPreProcessor())

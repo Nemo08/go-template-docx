@@ -3,6 +3,8 @@ package docx
 import (
 	"strings"
 	"testing"
+
+	"github.com/JJJJJJack/go-template-docx/internal/docx/autoexpand"
 )
 
 func TestNormalizeDocxplateHandler_DocxplateSyntax(t *testing.T) {
@@ -126,10 +128,9 @@ func TestDocxplateRegexConsistency(t *testing.T) {
 		if got != tt.expected {
 			t.Errorf("normalize(%q) = %q, want %q", tt.input, got, tt.expected)
 		}
-		// Проверка: результат начинается с {{. — это опциональная точка,
-		// которую ожидает reDocxplateVar в autoexpand.
-		if !strings.Contains(got, "{{.") {
-			t.Errorf("normalized output %q has no leading dot, autoexpand will not detect it", got)
+		// Проверка: результат детектируется autoexpand.DocxplateVar.
+		if !autoexpand.DocxplateVar.MatchString(got) {
+			t.Errorf("normalized output %q is not matched by autoexpand.DocxplateVar", got)
 		}
 	}
 }

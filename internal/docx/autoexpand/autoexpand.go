@@ -20,10 +20,10 @@ var (
 
 	reAnyIndex = regexp.MustCompile(`(\.)(\d+)(\.)`)
 
-	// reDocxplateVar matches docxplate-like references: {{ArrayName.Field}} or {{.ArrayName.Field}}.
+	// DocxplateVar matches docxplate-like references: {{ArrayName.Field}} or {{.ArrayName.Field}}.
 	// Logically related to docx.reNoDotDocxplate which normalises the same syntax
 	// to {{.Word.Word}} across all XML parts. If you change one, check the other.
-	reDocxplateVar = regexp.MustCompile(`\{\{\s*\.?(\w+)\.(\w+)\s*\}\}`)
+	DocxplateVar = regexp.MustCompile(`\{\{\s*\.?(\w+)\.(\w+)\s*\}\}`)
 
 	// reIndexPattern matches "index .X 0" function call to replace 0.
 	reIndexPattern = regexp.MustCompile(`(\bindex\s+\.\w+\s+)\d+`)
@@ -120,7 +120,7 @@ func tryExpandRow(rowXML string, dataMap map[string]any) (string, error) {
 // tryExpandDocxplateRow checks for docxplate-like references ({{ArrayName.Field}})
 // and expands the row if the named key is a known slice in dataMap.
 func tryExpandDocxplateRow(rowXML string, dataMap map[string]any) (string, error) {
-	m := reDocxplateVar.FindStringSubmatch(rowXML)
+	m := DocxplateVar.FindStringSubmatch(rowXML)
 	if m == nil {
 		return rowXML, nil
 	}

@@ -5,6 +5,7 @@ package docx
 import (
 	"bytes"
 	"fmt"
+	"log/slog"
 	"text/template"
 
 	"github.com/JJJJJJack/go-template-docx/internal/docx/rels"
@@ -77,8 +78,8 @@ func (d *documentMeta) ApplyTemplate(name string, content []byte, data any) ([]b
 	output, err := d.executeTemplate(tmpl, name, data)
 	if err != nil {
 		if d.IgnoreMissingKey {
-			// Return the prepared (patched) content as-is so template
-			// placeholders like {{.MissingKey}} remain for a later pass.
+			slog.Warn("template execution failed, keeping placeholders",
+				"file", name, "error", err)
 			return content, nil, nil
 		}
 		return nil, nil, err
